@@ -133,6 +133,7 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
  * 生成带行号的 diff 文本
  * ✅ 优化后的格式，强调新文件行号（NEW_LINE_xxx）
  * 使 AI 更容易识别应该使用的行号
+ * ✅ 添加 ← REVIEWABLE 标记，明确标识可以评论的行
  */
 export function generateNumberedDiff(diff: Diff): string {
   let result = '';
@@ -148,7 +149,7 @@ export function generateNumberedDiff(diff: Diff): string {
   for (const file of diff.files) {
     result += `File: ${file.path}\n`;
     result += `Changes: +${file.additions} -${file.deletions}\n`;
-    result += `Important: When reporting issues, use NEW_LINE_xxx numbers shown below\n\n`;
+    result += `Important: When reporting issues, use NEW_LINE_xxx numbers (marked with ← REVIEWABLE)\n\n`;
 
     for (const hunk of file.hunks) {
       result += `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`;
@@ -158,16 +159,16 @@ export function generateNumberedDiff(diff: Diff): string {
       
       for (const line of hunk.lines) {
         if (line.startsWith('+') && !line.startsWith('+++')) {
-          // 新增行：使用显眼的 NEW_LINE 前缀
-          result += `NEW_LINE_${newLineNum}: ${line}\n`;
+          // 新增行：使用显眼的 NEW_LINE 前缀 + REVIEWABLE 标记
+          result += `NEW_LINE_${newLineNum}: ${line} ← REVIEWABLE (ADDED)\n`;
           newLineNum++;
         } else if (line.startsWith('-') && !line.startsWith('---')) {
-          // 删除行：明确标记为 DELETED（不在新文件中）
-          result += `DELETED (was line ${oldLineNum}): ${line}\n`;
+          // 删除行：明确标记为 DELETED（不在新文件中，不可评论）
+          result += `DELETED (was line ${oldLineNum}): ${line} ← NOT REVIEWABLE\n`;
           oldLineNum++;
         } else if (!line.startsWith('\\') && !line.startsWith('@@')) {
-          // 上下文行：也使用 NEW_LINE 前缀
-          result += `NEW_LINE_${newLineNum}: ${line}\n`;
+          // 上下文行：也使用 NEW_LINE 前缀 + REVIEWABLE 标记
+          result += `NEW_LINE_${newLineNum}: ${line} ← REVIEWABLE (CONTEXT)\n`;
           oldLineNum++;
           newLineNum++;
         } else {
@@ -293,6 +294,59 @@ export function findNewLineNumber(file: DiffFile, targetLine: number): number | 
   
   // 找不到映射，返回 null（可能是删除的行）
   return null;
+}
+
+/**
+ * 可评论行的详细信息
+ */
+export interface ReviewableLineDetail {
+  line: number;
+  type: 'added' | 'context';
+  content: string;
+  raw: string;
+}
+
+/**
+ * 获取文件中所有可评论行的详细信息（新增行和上下文行）
+ */
+export function getReviewableLineDetails(file: DiffFile): ReviewableLineDetail[] {
+  const details: ReviewableLineDetail[] = [];
+  
+  for (const hunk of file.hunks) {
+    let currentNewLine = hunk.newStart;
+    
+    for (const line of hunk.lines) {
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        details.push({
+          line: currentNewLine,
+          type: 'added',
+          content: line.substring(1).trim(),
+          raw: line,
+        });
+        currentNewLine++;
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        // 删除的行，不可评论
+      } else if (!line.startsWith('\\') && !line.startsWith('@@')) {
+        details.push({
+          line: currentNewLine,
+          type: 'context',
+          content: line.substring(1).trim(),
+          raw: line,
+        });
+        currentNewLine++;
+      }
+    }
+  }
+  
+  return details;
+}
+
+/**
+ * 获取文件中所有可评论的行号（新增行和上下文行）
+ * 用于验证 AI 返回的行号是否有效
+ */
+export function getReviewableLines(file: DiffFile): Set<number> {
+  return new Set(getReviewableLineDetails(file).map(detail => detail.line));
 }
 
 /**

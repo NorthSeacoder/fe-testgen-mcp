@@ -153,15 +153,15 @@ export abstract class BaseAgent<T> {
    */
   protected getLineNumberInstructions(): string {
     return `**重要说明 - 行号格式（请仔细阅读）**：
-1. 下面的 diff 使用特殊格式标记行号：
-   - NEW_LINE_10: +import React from 'react';  ← 这是新文件的第10行（新增的行）
-   - NEW_LINE_15:  const a = 1;  ← 这是新文件的第15行（未改变的上下文行）
-   - DELETED (was line 8): -const old = 1;  ← 这一行已被删除，不在新文件中
+1. 下面的 diff 使用特殊格式标记行号，并明确哪些行可评论：
+   - NEW_LINE_10: +import React from 'react'; ← REVIEWABLE (ADDED)  ← 这是新文件的第10行（新增的行，可评论）
+   - NEW_LINE_15:  const a = 1; ← REVIEWABLE (CONTEXT)  ← 这是新文件的第15行（未改变的上下文行，也可评论）
+   - DELETED (was line 8): -const old = 1; ← NOT REVIEWABLE  ← 这一行已被删除，不在新文件中
 
 2. **关键规则 - 必须严格遵守**：
-   ✅ 返回的 line 字段必须使用 NEW_LINE_xxx 中的数字
-   ✅ 例如看到 "NEW_LINE_42: +const foo = 1;" 应该返回 "line": 42
-   ❌ 绝对不要报告 DELETED 开头的行（这些行已不存在于新文件中）
+   ✅ 返回的 line 字段必须使用 NEW_LINE_xxx 中的数字，并且只针对带有 "← REVIEWABLE" 标记的行（ADDED 或 CONTEXT 均可）
+   ✅ 例如看到 "NEW_LINE_42: +const foo = 1; ← REVIEWABLE (ADDED)" 应该返回 "line": 42
+   ❌ 绝对不要报告 DELETED / NOT REVIEWABLE 的行（这些行已不存在于新文件中）
    ❌ 如果看到 "DELETED (was line 8)"，不要使用数字 8
 
 3. 其他注意事项：

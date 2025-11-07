@@ -19,7 +19,7 @@ import type { Config } from '../config/schema.js';
 import type { ReviewDiffInput } from '../schemas/tool-io.js';
 import type { ReviewResult } from '../schemas/issue.js';
 import { logger } from '../utils/logger.js';
-import { findNewLineNumber } from '../utils/diff-parser.js';
+import { findNewLineNumber, getReviewableLines } from '../utils/diff-parser.js';
 import { getProjectPath } from '../utils/paths.js';
 import { loadRepoPrompt, mergePromptConfigs } from '../utils/repo-prompt.js';
 import { detectProjectRoot } from '../utils/project-root.js';
@@ -270,16 +270,45 @@ export class ReviewDiffTool {
       try {
         const fileMap = new Map(frontendDiff.files.map(f => [f.path, f]));
         
+        // 构建可评论行的映射（用于验证和调试）
+        const reviewableLinesMap = new Map<string, Set<number>>();
+        for (const file of frontendDiff.files) {
+          reviewableLinesMap.set(file.path, getReviewableLines(file));
+        }
+        
         const publishableIssues = allIssues
           .filter(issue => issue.confidence >= 0.8)
           .map(issue => {
             const file = fileMap.get(issue.file);
             if (!file) {
+              logger.warn('Issue references non-existent file', {
+                issueFile: issue.file,
+                issueLine: issue.line,
+                availableFiles: Array.from(fileMap.keys()),
+              });
               return null;
             }
             
+            // 首先检查行号是否在可评论行集合中
+            const reviewableLines = reviewableLinesMap.get(issue.file);
+            if (!reviewableLines || !reviewableLines.has(issue.line)) {
+              logger.warn('Issue line is not reviewable (not an added or context line)', {
+                file: issue.file,
+                line: issue.line,
+                message: issue.message,
+                reviewableLines: reviewableLines ? Array.from(reviewableLines).sort((a, b) => a - b) : [],
+              });
+              return null;
+            }
+            
+            // 再使用 findNewLineNumber 进行二次验证
             const newLine = findNewLineNumber(file, issue.line);
             if (newLine === null) {
+              logger.error('Line validation failed: findNewLineNumber returned null for reviewable line', {
+                file: issue.file,
+                line: issue.line,
+                message: issue.message,
+              });
               return null;
             }
             
