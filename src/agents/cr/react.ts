@@ -47,18 +47,7 @@ export class ReactAgent extends BaseAgent<Issue> {
     
     return `分析以下代码变更，识别 React 相关问题：
 
-**重要说明**：
-1. 下面的内容是 git diff 格式，带有行号标记，格式为 "-旧行号 +新行号: 代码内容"
-   - 新增行：-n/a +10: +import React from 'react';
-   - 删除行：-8 +n/a: -const old = 1;
-   - 上下文行：-8 +10:  const a = 1;
-2. **关键**：返回的 line 字段必须使用**新文件的行号**（即 + 号后面的行号）
-   - 如果是新增行或修改行，使用新文件行号
-   - 如果是删除的行（+n/a），不要报告问题（因为该行在新版本中不存在）
-3. diff 中只显示了变更的行及其上下文，未显示的行不代表不存在
-4. 在判断某个导入是否使用时，请务必检查完整的文件内容，不要仅根据 diff 片段判断
-5. 如果你不确定某个问题是否真的存在（如上下文不足），请降低置信度至 0.5 以下或不报告
-6. **关键**：返回的 file 字段必须使用下面"变更的文件列表"中的准确路径，不要修改扩展名（如不要把 .less 改成 .css）
+${this.getLineNumberInstructions()}
 
 **变更的文件列表**：
 - ${this.buildFilePathsList(files)}
@@ -73,7 +62,7 @@ ${fileList}
 
 返回 JSON 格式的问题列表，每个问题包含：
 - file: 文件路径（必须从上面的文件列表中选择，保持完全一致）
-- line: **新文件的行号**（必须是 diff 中 + 号后面显示的行号，不要使用 - 号的旧行号）
+- line: **新文件的行号**（从 NEW_LINE_xxx 中提取数字，绝不使用 DELETED 行的数字）
 - severity: critical/high/medium/low
 - message: 问题描述
 - suggestion: 修复建议

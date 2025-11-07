@@ -131,8 +131,8 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
 
 /**
  * 生成带行号的 diff 文本
- * ✅ 参考 code_review_agent 的格式：-old +new: line
- * 这样 AI 可以清楚知道旧行号和新行号的对应关系
+ * ✅ 优化后的格式，强调新文件行号（NEW_LINE_xxx）
+ * 使 AI 更容易识别应该使用的行号
  */
 export function generateNumberedDiff(diff: Diff): string {
   let result = '';
@@ -147,7 +147,8 @@ export function generateNumberedDiff(diff: Diff): string {
 
   for (const file of diff.files) {
     result += `File: ${file.path}\n`;
-    result += `Changes: +${file.additions} -${file.deletions}\n\n`;
+    result += `Changes: +${file.additions} -${file.deletions}\n`;
+    result += `Important: When reporting issues, use NEW_LINE_xxx numbers shown below\n\n`;
 
     for (const hunk of file.hunks) {
       result += `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`;
@@ -157,16 +158,16 @@ export function generateNumberedDiff(diff: Diff): string {
       
       for (const line of hunk.lines) {
         if (line.startsWith('+') && !line.startsWith('+++')) {
-          // 新增行：-n/a +new: +line
-          result += `-n/a\t+${newLineNum}:\t${line}\n`;
+          // 新增行：使用显眼的 NEW_LINE 前缀
+          result += `NEW_LINE_${newLineNum}: ${line}\n`;
           newLineNum++;
         } else if (line.startsWith('-') && !line.startsWith('---')) {
-          // 删除行：-old +n/a: -line
-          result += `-${oldLineNum}\t+n/a:\t${line}\n`;
+          // 删除行：明确标记为 DELETED（不在新文件中）
+          result += `DELETED (was line ${oldLineNum}): ${line}\n`;
           oldLineNum++;
         } else if (!line.startsWith('\\') && !line.startsWith('@@')) {
-          // 上下文行：-old +new:  line
-          result += `-${oldLineNum}\t+${newLineNum}:\t${line}\n`;
+          // 上下文行：也使用 NEW_LINE 前缀
+          result += `NEW_LINE_${newLineNum}: ${line}\n`;
           oldLineNum++;
           newLineNum++;
         } else {

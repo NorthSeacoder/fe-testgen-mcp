@@ -119,6 +119,29 @@ export abstract class BaseAgent<T> {
   }
 
   /**
+   * 生成标准的行号说明（所有 CR agents 共用）
+   */
+  protected getLineNumberInstructions(): string {
+    return `**重要说明 - 行号格式（请仔细阅读）**：
+1. 下面的 diff 使用特殊格式标记行号：
+   - NEW_LINE_10: +import React from 'react';  ← 这是新文件的第10行（新增的行）
+   - NEW_LINE_15:  const a = 1;  ← 这是新文件的第15行（未改变的上下文行）
+   - DELETED (was line 8): -const old = 1;  ← 这一行已被删除，不在新文件中
+
+2. **关键规则 - 必须严格遵守**：
+   ✅ 返回的 line 字段必须使用 NEW_LINE_xxx 中的数字
+   ✅ 例如看到 "NEW_LINE_42: +const foo = 1;" 应该返回 "line": 42
+   ❌ 绝对不要报告 DELETED 开头的行（这些行已不存在于新文件中）
+   ❌ 如果看到 "DELETED (was line 8)"，不要使用数字 8
+
+3. 其他注意事项：
+   - diff 中只显示了变更的行及其上下文，未显示的行不代表不存在
+   - 在判断某个导入是否使用时，请务必检查完整的文件内容，不要仅根据 diff 片段判断
+   - 如果你不确定某个问题是否真的存在（如上下文不足），请降低置信度至 0.5 以下或不报告
+   - 返回的 file 字段必须使用下面"变更的文件列表"中的准确路径，不要修改扩展名（如不要把 .less 改成 .css）`;
+  }
+
+  /**
    * 修正文件路径（处理 AI 可能返回的错误扩展名）
    * @param reportedPath AI 返回的文件路径
    * @param files 实际的文件列表

@@ -21,6 +21,7 @@ import { PublishCommentsTool } from './tools/publish-comments.js';
 import { TestMatrixAnalyzer } from './agents/test-matrix-analyzer.js';
 import { detectProjectTestStack } from './tools/detect-stack.js';
 import { ResolvePathTool } from './tools/resolve-path.js';
+import { WriteTestFileTool } from './tools/write-test-file.js';
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ let generateTestsTool: GenerateTestsTool;
 let analyzeTestMatrixTool: AnalyzeTestMatrixTool;
 let publishCommentsTool: PublishCommentsTool;
 let resolvePathTool: ResolvePathTool;
+let writeTestFileTool: WriteTestFileTool;
 
 function initialize() {
   try {
@@ -121,6 +123,8 @@ function initialize() {
       embeddingClient,
       config
     );
+
+    writeTestFileTool = new WriteTestFileTool();
 
     logger.info('Initialization complete');
   } catch (error) {
@@ -351,6 +355,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'write-test-file',
+        description:
+          '将生成的测试用例写入文件。\n' +
+          '⚠️ 默认情况下，如果文件已存在会跳过写入（除非设置 overwrite=true）。\n\n' +
+          '使用场景：\n' +
+          '• 将 generate-tests 生成的测试代码保存到磁盘\n' +
+          '• 批量写入多个测试文件',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            files: {
+              type: 'array',
+              description: '要写入的测试文件列表',
+              items: {
+                type: 'object',
+                properties: {
+                  filePath: {
+                    type: 'string',
+                    description: '测试文件的绝对路径',
+                  },
+                  content: {
+                    type: 'string',
+                    description: '要写入的测试代码',
+                  },
+                  overwrite: {
+                    type: 'boolean',
+                    description: '是否覆盖已存在的文件（默认 false）',
+                  },
+                },
+                required: ['filePath', 'content'],
+              },
+            },
+          },
+          required: ['files'],
+        },
+      },
+      {
         name: 'publish-phabricator-comments',
         description: '发布评论到 Phabricator',
         inputSchema: {
@@ -384,7 +425,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ['revisionId', 'comments'],
         },
-      },
+      }
     ],
   };
 });
@@ -565,6 +606,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'write-test-file': {
+        const input = args as {
+          files: Array<{
+            filePath: string;
+            content: string;
+            overwrite?: boolean;
+          }>;
+        };
+        const results = await writeTestFileTool.writeMultiple(input.files);
+        const successCount = results.filter(r => r.success).length;
+        logger.info(`Tool '${name}' completed successfully`, {
+          total: results.length,
+          success: successCount,
+          failed: results.length - successCount,
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: successCount,
+                total: results.length,
+                results,
+              }, null, 2),
             },
           ],
         };

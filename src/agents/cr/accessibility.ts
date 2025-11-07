@@ -47,18 +47,7 @@ export class AccessibilityAgent extends BaseAgent<Issue> {
     
     return `分析以下代码变更，识别无障碍访问（Accessibility）相关问题：
 
-**重要说明**：
-1. 下面的内容是 git diff 格式，带有行号标记，格式为 "-旧行号 +新行号: 代码内容"
-   - 新增行：-n/a +10: +<button>Click</button>
-   - 删除行：-8 +n/a: -<div>Old</div>
-   - 上下文行：-8 +10:  <div>Content</div>
-2. **关键**：返回的 line 字段必须使用**新文件的行号**（即 + 号后面的行号）
-   - 如果是新增行或修改行，使用新文件行号
-   - 如果是删除的行（+n/a），不要报告问题（因为该行在新版本中不存在）
-3. diff 中只显示了变更的行及其上下文，未显示的行不代表不存在
-4. 在判断无障碍问题时，请检查完整的文件内容和上下文
-5. 如果上下文不足以确定问题，请降低置信度至 0.5 以下或不报告
-6. **关键**：返回的 file 字段必须使用下面"变更的文件列表"中的准确路径，不要修改扩展名
+${this.getLineNumberInstructions()}
 
 **变更的文件列表**：
 - ${this.buildFilePathsList(files)}

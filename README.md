@@ -161,7 +161,7 @@ projectContextPrompt: "src/prompts/project-context.md"
 
 ### 可用工具
 
-本 MCP Server 提供 7 个工具，涵盖测试生成和代码审查的完整流程。
+本 MCP Server 提供 8 个工具，涵盖测试生成和代码审查的完整流程。
 
 #### 1. detect-project-test-stack
 
@@ -217,6 +217,9 @@ projectContextPrompt: "src/prompts/project-context.md"
 #### 3. review-frontend-diff
 
 **功能：** 对前端代码变更进行多维度智能审查，支持自动识别审查主题并生成评论。
+
+> 💡 **行号说明**：diff 中所有新行都以 `NEW_LINE_XX` 开头；所有已删除的行会标记为 `DELETED (was line XX)`。
+> 发布评论时将始终使用 `NEW_LINE_XX` 对应的新文件行号，避免出现行数偏移。
 
 **参数：**
 ```typescript
@@ -394,6 +397,33 @@ projectContextPrompt: "src/prompts/project-context.md"
 - 在自定义工作流中手动解析路径
 
 **注意：** 其他工具（如 `analyze-test-matrix`、`review-frontend-diff`）已内置路径解析功能，一般情况下无需直接调用此工具。
+
+---
+
+#### 8. write-test-file
+
+**功能：** 将生成的测试用例写入磁盘文件。
+
+**参数：**
+```typescript
+{
+  files: Array<{
+    filePath: string;   // 测试文件的绝对路径
+    content: string;    // 要写入的测试代码
+    overwrite?: boolean // 是否覆盖已存在的文件（默认 false）
+  }>
+}
+```
+
+**返回：**
+- success: 写入成功的文件数量
+- total: 处理的文件总数
+- results: 每个文件的写入结果（success/error）
+
+**使用场景：**
+- 将 `generate-tests` 生成的测试代码落盘
+- 批量创建多个测试文件
+- 控制是否覆盖已有文件（默认不覆盖，避免误删）
 
 ## 架构
 
