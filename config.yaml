@@ -1,0 +1,73 @@
+llm:
+  provider: openai
+  model: ${OPENAI_MODEL}
+  apiKey: ${OPENAI_API_KEY}
+  baseURL: ${OPENAI_BASE_URL}
+  temperature: 0
+  topP: 1
+  maxTokens: 4096
+  timeout: 60000
+  maxRetries: 3
+
+embedding:
+  baseURL: ${EMBEDDING_BASE_URL}
+  model: ${EMBEDDING_MODEL}
+  enabled: false  # 暂时禁用 embedding 去重，使用签名匹配
+
+phabricator:
+  host: ${PHABRICATOR_HOST}
+  token: ${PHABRICATOR_TOKEN}
+
+cache:
+  dir: .cache
+  ttl: 86400
+
+state:
+  dir: .state
+
+filter:
+  confidenceMinGlobal: 0.7
+  scenarioConfidenceMin:
+    happy-path: 0.6
+    edge-case: 0.6
+    error-path: 0.8
+    critical: 0.9
+    high: 0.8
+    medium: 0.7
+    low: 0.6
+  similarityThreshold: 0.85
+  scenarioLimits:
+    happy-path: 10
+    edge-case: 8
+    error-path: 5
+
+# 项目特定规则 prompt 路径（可选）
+# 用于在代码审查时附加项目特定的规则和约定
+# 例如：统一封装的函数、项目约定等
+# projectContextPrompt: src/prompts/project-context.md
+
+# 被测项目的根目录路径（可选，通常不需要配置）
+# 工具会自动从 diff 文件路径推断项目根目录，并智能识别 monorepo
+# 仅在自动检测失败时才需要手动指定
+# projectRoot: /path/to/your/project
+
+orchestrator:
+  parallelAgents: true
+  maxConcurrency: 5
+
+crTopics:
+  - react
+  - typescript
+  - performance
+  - accessibility
+  - security
+  - css
+  - i18n
+  - testing-suggestions
+
+testScenarios:
+  - happy-path
+  - edge-case
+  - error-path
+  - state-change
+
