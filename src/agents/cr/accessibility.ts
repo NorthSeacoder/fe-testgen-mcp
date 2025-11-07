@@ -102,7 +102,12 @@ ${fileList}
           confidence: Math.max(0, Math.min(1, item.confidence || 0.7)),
         };
         return issue;
-      }).filter((issue): issue is Issue => issue !== null && issue.file && issue.message);
+      }).filter((issue): issue is Issue => {
+        if (!issue) {
+          return false;
+        }
+        return Boolean(issue.file) && Boolean(issue.message);
+      });
     } catch (error) {
       logger.warn('Failed to parse AccessibilityAgent response', { response, error });
       return [];

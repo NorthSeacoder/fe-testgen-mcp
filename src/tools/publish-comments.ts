@@ -14,7 +14,7 @@ export class PublishCommentsTool {
   ) {}
 
   async publish(input: PublishCommentsInput & { fileMap?: Map<string, DiffFile> }): Promise<PublishCommentsOutput> {
-    const { revisionId, comments, message, incremental = true, fileMap } = input;
+    const { revisionId, comments, message, incremental = true } = input;
 
     const details: Array<{ issueId: string; status: 'published' | 'skipped' | 'failed'; error?: string; reason?: string }> = [];
     let published = 0;
