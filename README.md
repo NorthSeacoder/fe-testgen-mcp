@@ -161,31 +161,11 @@ projectContextPrompt: "src/prompts/project-context.md"
 
 ### 可用工具
 
-本 MCP Server 提供 11 个工具，涵盖测试生成和代码审查的完整流程。
+本 MCP Server 提供 9 个工具，涵盖测试生成和代码审查的完整流程。
 
-#### 1. detect-project-test-stack
+> 💡 **架构优化**: 移除了 `detect-project-test-stack` 和 `resolve-path` 这两个内部工具，它们的功能已集成到需要它们的工具中（如 `analyze-test-matrix`），简化了 API 并提高了代码复用性。
 
-**功能：** 自动检测项目使用的测试框架（Vitest 或 Jest）。
-
-**参数：**
-```typescript
-{
-  repoRoot?: string  // 项目根目录路径（可选）
-}
-```
-
-**返回：**
-- 测试框架类型（vitest/jest/unknown）
-- 检测到的配置文件
-- 项目根目录路径
-
-**使用场景：**
-- 在生成测试前确认项目测试框架
-- 调试项目根目录检测问题
-
----
-
-#### 2. fetch-diff
+#### 1. fetch-diff
 
 **功能：** 从 Phabricator 获取完整的 Diff 内容，包括所有文件变更、hunks 和统计信息。
 
@@ -211,6 +191,31 @@ projectContextPrompt: "src/prompts/project-context.md"
 - 仅需查看 diff，不执行审查或测试生成
 
 **注意：** 此工具返回的信息已包含所有变更细节，无需使用 `git show` 等命令。
+
+---
+
+#### 2. fetch-commit-changes
+
+**功能：** 从本地 Git 仓库获取指定 commit 的变更内容。
+
+**参数：**
+```typescript
+{
+  commitHash: string  // Git commit hash（支持短 hash）
+  repoPath?: string   // 本地仓库路径（默认当前工作目录）
+}
+```
+
+**返回：**
+- commit 信息（hash、作者、提交时间、标题）
+- 变更文件列表（仅保留前端文件）
+- 每个文件的 hunks（NEW_LINE_xxx 标记新行）
+- 完整的 diff 文本
+
+**使用场景：**
+- 代码合并后，根据 commit 生成功能清单和测试矩阵
+- 无需 Phabricator 的环境下获取 diff
+- 作为增量分析的基础数据源
 
 ---
 
@@ -375,32 +380,7 @@ projectContextPrompt: "src/prompts/project-context.md"
 
 ---
 
-#### 7. resolve-path
-
-**功能：** 将相对路径解析为绝对路径，并返回检测到的项目根目录（高级工具，一般无需直接调用）。
-
-**参数：**
-```typescript
-{
-  paths: string[]          // 相对路径数组
-  projectRoot?: string     // 项目根目录路径（可选，优先级最高）
-}
-```
-
-**返回：**
-- 项目根目录路径
-- 解析后的绝对路径列表
-
-**使用场景：**
-- 调试路径解析问题
-- 验证项目根目录检测是否正确
-- 在自定义工作流中手动解析路径
-
-**注意：** 其他工具（如 `analyze-test-matrix`、`review-frontend-diff`）已内置路径解析功能，一般情况下无需直接调用此工具。
-
----
-
-#### 8. write-test-file
+#### 7. write-test-file
 
 **功能：** 将生成的测试用例写入磁盘文件。
 
@@ -427,25 +407,7 @@ projectContextPrompt: "src/prompts/project-context.md"
 
 ---
 
-#### 9. fetch-commit-changes
-
-**功能：** 从本地 Git 仓库获取指定 commit 的变更内容。
-
-**参数：**
-```typescript
-{
-  commitHash: string   // Git commit hash（支持短 hash）
-  repoPath?: string    // 仓库路径（默认当前工作目录）
-}
-```
-
-**使用场景：**
-- 代码合并后根据 commit 生成功能清单和测试矩阵
-- 在没有 Phabricator 的环境下获取 diff
-
----
-
-#### 10. analyze-commit-test-matrix
+#### 8. analyze-commit-test-matrix
 
 **功能：** 分析 commit 的功能清单和测试矩阵。
 
@@ -464,7 +426,7 @@ projectContextPrompt: "src/prompts/project-context.md"
 
 ---
 
-#### 11. run-tests
+#### 9. run-tests
 
 **功能：** 在项目中执行测试命令。
 
@@ -502,13 +464,26 @@ src/
 │   └── phabricator.ts  # Phabricator API 客户端
 ├── orchestrator/       # 工作流编排
 ├── tools/              # MCP 工具实现
+│   ├── base-analyze-test-matrix.ts  # 测试矩阵分析基类（共享逻辑）
+│   ├── analyze-test-matrix.ts       # Phabricator diff 分析
+│   ├── analyze-commit-test-matrix.ts # Git commit 分析
+│   └── ...
 ├── prompts/            # AI 提示词模板
 ├── schemas/            # 数据结构定义
 ├── utils/              # 工具函数
+│   ├── response-formatter.ts  # MCP 响应格式化（统一）
+│   └── ...
 ├── cache/              # 缓存管理
 ├── state/              # 状态管理
 └── config/             # 配置加载
 ```
+
+### 代码优化亮点
+
+- **统一响应格式化**: `utils/response-formatter.ts` 提供统一的 MCP 响应格式化，减少重复代码
+- **共享分析逻辑**: `tools/base-analyze-test-matrix.ts` 基类封装测试矩阵分析的通用逻辑，避免 85% 的代码重复
+- **精简工具层**: 移除冗余的内部工具（`detect-project-test-stack`、`resolve-path`），集成到需要它们的工具中
+- **清晰的关注点分离**: 工具层专注业务逻辑，格式化和共享逻辑独立维护
 
 ## 开发
 

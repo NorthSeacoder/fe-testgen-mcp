@@ -19,12 +19,12 @@ import { GenerateTestsTool } from './tools/generate-tests.js';
 import { AnalyzeTestMatrixTool } from './tools/analyze-test-matrix.js';
 import { PublishCommentsTool } from './tools/publish-comments.js';
 import { TestMatrixAnalyzer } from './agents/test-matrix-analyzer.js';
-import { detectProjectTestStack } from './tools/detect-stack.js';
 import { ResolvePathTool } from './tools/resolve-path.js';
 import { WriteTestFileTool } from './tools/write-test-file.js';
 import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { AnalyzeCommitTestMatrixTool } from './tools/analyze-commit-test-matrix.js';
 import { RunTestsTool } from './tools/run-tests.js';
+import { formatJsonResponse, formatErrorResponse, formatDiffResponse } from './utils/response-formatter.js';
 
 dotenv.config();
 
@@ -167,19 +167,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: 'detect-project-test-stack',
-        description: '探测项目测试技术栈（Vitest/Jest）',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            repoRoot: {
-              type: 'string',
-              description: '项目根目录路径（可选）',
-            },
-          },
-        },
-      },
-      {
         name: 'fetch-diff',
         description: 
           '从 Phabricator 获取完整的 diff 内容（包括所有变更细节）。\n\n' +
@@ -242,32 +229,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ['commitHash'],
         },
-      },
-      {
-        name: 'resolve-path',
-        description: 
-          '【高级工具】将相对路径解析为绝对路径，并返回检测到的项目根目录。\n\n' +
-          '⚠️ 注意：此工具主要供内部使用，一般情况下无需直接调用。\n' +
-          '其他工具（如 analyze-test-matrix、review-frontend-diff）已经内置了路径解析功能。\n\n' +
-          '使用场景：\n' +
-          '• 调试路径解析问题\n' +
-          '• 验证项目根目录检测是否正确\n' +
-          '• 在自定义工作流中需要手动解析路径',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              paths: {
-                type: 'array',
-                items: { type: 'string' },
-                description: '相对路径数组（相对于项目根目录/子包）',
-              },
-              projectRoot: {
-                type: 'string',
-                description: '项目根目录路径（可选），优先级最高',
-              },
-            },
-            required: ['paths'],
-          },
       },
       {
         name: 'review-frontend-diff',
@@ -538,19 +499,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case 'detect-project-test-stack': {
-        const repoRoot = (args as { repoRoot?: string })?.repoRoot;
-        const stack = await detectProjectTestStack(repoRoot);
-        logger.info(`Tool '${name}' completed successfully`);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(stack, null, 2),
-            },
-          ],
-        };
-      }
 
       case 'fetch-diff': {
         const { revisionId, forceRefresh } = args as {
@@ -559,38 +507,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
         const diff = await fetchDiffTool.fetch({ revisionId, forceRefresh });
         const frontendDiff = fetchDiffTool.filterFrontendFiles(diff);
-        logger.info(`Tool '${name}' completed successfully`, { 
-          revisionId: diff.revisionId, 
-          filesCount: frontendDiff.files.length 
+        logger.info(`Tool '${name}' completed successfully`, {
+          revisionId: diff.revisionId,
+          filesCount: frontendDiff.files.length,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                revisionId: diff.revisionId,
-                diffId: diff.diffId,
-                title: diff.title,
-                summary: diff.summary,
-                files: frontendDiff.files.map(f => ({
-                  path: f.path,
-                  changeType: f.changeType,
-                  additions: f.additions,
-                  deletions: f.deletions,
-                  hunks: f.hunks.map(h => ({
-                    oldStart: h.oldStart,
-                    oldLines: h.oldLines,
-                    newStart: h.newStart,
-                    newLines: h.newLines,
-                    content: h.lines.join('\n'),
-                  })),
-                })),
-                // 提供完整的 diff 文本（带行号）
-                fullDiff: frontendDiff.numberedRaw || frontendDiff.raw,
-              }, null, 2),
-            },
-          ],
-        };
+        return formatDiffResponse(frontendDiff);
       }
 
       case 'fetch-commit-changes': {
@@ -607,54 +528,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           commit: commitResult.commitInfo.hash.substring(0, 7),
           filesCount: frontendDiff.files.length,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                commit: commitResult.commitInfo,
-                files: frontendDiff.files.map(f => ({
-                  path: f.path,
-                  changeType: f.changeType,
-                  additions: f.additions,
-                  deletions: f.deletions,
-                  hunks: f.hunks.map(h => ({
-                    oldStart: h.oldStart,
-                    oldLines: h.oldLines,
-                    newStart: h.newStart,
-                    newLines: h.newLines,
-                    content: h.lines.join('\n'),
-                  })),
-                })),
-                fullDiff: frontendDiff.numberedRaw || frontendDiff.raw,
-              }, null, 2),
-            },
-          ],
-        };
+        return formatDiffResponse(frontendDiff, { commit: commitResult.commitInfo });
       }
 
-      case 'resolve-path': {
-        const input = args as {
-          paths: string[];
-          projectRoot?: string;
-        };
-        const result = await resolvePathTool.resolve({
-          paths: input.paths,
-          projectRoot: input.projectRoot,
-        });
-        logger.info(`Tool '${name}' completed successfully`, {
-          root: result.root,
-          paths: result.resolved.length,
-        });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
 
       case 'review-frontend-diff': {
         const input = args as {
@@ -671,19 +547,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           publish: input.publish || false,
           forceRefresh: input.forceRefresh || false,
         });
-        logger.info(`Tool '${name}' completed successfully`, { 
+        logger.info(`Tool '${name}' completed successfully`, {
           revisionId: input.revisionId,
           issuesCount: result.issues.length,
-          published: input.publish 
+          published: input.publish,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return formatJsonResponse(result);
       }
 
       case 'analyze-test-matrix': {
@@ -697,28 +566,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           projectRoot: input.projectRoot,
           forceRefresh: input.forceRefresh || false,
         });
-        logger.info(`Tool '${name}' completed successfully`, { 
+        logger.info(`Tool '${name}' completed successfully`, {
           revisionId: input.revisionId,
           projectRoot: input.projectRoot,
           features: result.matrix.summary.totalFeatures,
           scenarios: result.matrix.summary.totalScenarios,
-          estimatedTests: result.matrix.summary.estimatedTests
+          estimatedTests: result.matrix.summary.estimatedTests,
         });
-        
-        // 在返回结果中包含 projectRoot，以便后续工具使用
+
         const resultWithProjectRoot = {
           ...result,
-          projectRoot: input.projectRoot, // 添加 projectRoot 到返回结果
+          projectRoot: input.projectRoot,
         };
-        
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(resultWithProjectRoot, null, 2),
-            },
-          ],
-        };
+
+        return formatJsonResponse(resultWithProjectRoot);
       }
 
       case 'analyze-commit-test-matrix': {
@@ -738,14 +599,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           scenarios: result.matrix.summary.totalScenarios,
           estimatedTests: result.matrix.summary.estimatedTests,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return formatJsonResponse(result);
       }
 
       case 'generate-tests': {
@@ -765,19 +619,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           maxTests: input.maxTests,
           forceRefresh: input.forceRefresh || false,
         });
-        logger.info(`Tool '${name}' completed successfully`, { 
+        logger.info(`Tool '${name}' completed successfully`, {
           revisionId: input.revisionId,
           testsCount: result.tests.length,
-          scenarios: result.identifiedScenarios 
+          scenarios: result.identifiedScenarios,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return formatJsonResponse(result);
       }
 
       case 'run-tests': {
@@ -798,14 +645,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           exitCode: result.exitCode,
           durationMs: result.durationMs,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return formatJsonResponse(result);
       }
 
       case 'write-test-file': {
@@ -823,18 +663,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           success: successCount,
           failed: results.length - successCount,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: successCount,
-                total: results.length,
-                results,
-              }, null, 2),
-            },
-          ],
-        };
+        return formatJsonResponse({
+          success: successCount,
+          total: results.length,
+          results,
+        });
       }
 
       case 'publish-phabricator-comments': {
@@ -855,48 +688,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           message: input.message,
           incremental: input.incremental !== undefined ? input.incremental : true,
         });
-        logger.info(`Tool '${name}' completed successfully`, { 
+        logger.info(`Tool '${name}' completed successfully`, {
           revisionId: input.revisionId,
           published: result.published,
-          skipped: result.skipped 
+          skipped: result.skipped,
         });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
+        return formatJsonResponse(result);
       }
 
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
-    const errorDetails = error instanceof Error ? {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-    } : { raw: String(error) };
-    
-    logger.error(`Tool ${name} failed`, { 
+    const errorDetails =
+      error instanceof Error
+        ? {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          }
+        : { raw: String(error) };
+
+    logger.error(`Tool ${name} failed`, {
       error: errorDetails,
       args,
     });
-    
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
+
+    return formatErrorResponse(error);
   }
 });
 
