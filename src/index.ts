@@ -26,7 +26,6 @@ import { AnalyzeCommitTestMatrixTool } from './tools/analyze-commit-test-matrix.
 import { RunTestsTool } from './tools/run-tests.js';
 import { AnalyzeRawDiffTestMatrixTool } from './tools/analyze-raw-diff-test-matrix.js';
 import { GenerateTestsFromRawDiffTool } from './tools/generate-tests-from-raw-diff.js';
-import { ReviewRawDiffTool } from './tools/review-raw-diff.js';
 import { formatJsonResponse, formatErrorResponse, formatDiffResponse } from './utils/response-formatter.js';
 
 dotenv.config();
@@ -49,7 +48,6 @@ let analyzeCommitTestMatrixTool: AnalyzeCommitTestMatrixTool;
 let runTestsTool: RunTestsTool;
 let analyzeRawDiffTestMatrixTool: AnalyzeRawDiffTestMatrixTool;
 let generateTestsFromRawDiffTool: GenerateTestsFromRawDiffTool;
-let reviewRawDiffTool: ReviewRawDiffTool;
 
 function initialize() {
   try {
@@ -143,13 +141,6 @@ function initialize() {
     );
 
     generateTestsFromRawDiffTool = new GenerateTestsFromRawDiffTool(
-      stateManager,
-      openaiClient,
-      embeddingClient,
-      config
-    );
-
-    reviewRawDiffTool = new ReviewRawDiffTool(
       stateManager,
       openaiClient,
       embeddingClient,
@@ -298,68 +289,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['revisionId'],
-        },
-      },
-      {
-        name: 'review-raw-diff',
-        description:
-          '🆕 针对外部传入的 raw diff 进行代码审查（n8n / GitLab 专用）。\n\n' +
-          '💡 使用场景：\n' +
-          '• n8n 工作流中，GitLab 节点已获取 MR diff\n' +
-          '• 需要在 GitLab MR / GitHub PR 上发布评论\n' +
-          '• 无需访问 Phabricator 或本地 Git\n\n' +
-          '✨ 特性：\n' +
-          '• 与 review-frontend-diff 相同的多 Agent 审查能力\n' +
-          '• 自动识别审查主题，支持增量去重\n' +
-          '• 支持仓库级 prompt 配置、Monorepo 子项目\n' +
-          '• 输出结构化的审查问题，便于 n8n 节点发布评论\n\n' +
-          '📋 推荐 n8n 工作流：\n' +
-          '1. [GitLab 节点] 获取 MR diff\n' +
-          '2. [此工具] 执行代码审查\n' +
-          '3. [Code 节点] 格式化评论\n' +
-          '4. [GitLab 节点] 发布 MR 评论',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            rawDiff: {
-              type: 'string',
-              description: 'Unified diff 格式的原始文本（必需）',
-            },
-            identifier: {
-              type: 'string',
-              description: '唯一标识符（如 MR-123，用于状态存储）',
-            },
-            projectRoot: {
-              type: 'string',
-              description: '项目根目录绝对路径（用于路径解析和仓库配置）',
-            },
-            metadata: {
-              type: 'object',
-              description: '可选元数据（标题、作者、分支等）',
-              properties: {
-                title: { type: 'string', description: 'MR 标题' },
-                author: { type: 'string', description: '作者' },
-                mergeRequestId: { type: 'string', description: 'MR ID' },
-                commitHash: { type: 'string', description: 'commit hash' },
-                branch: { type: 'string', description: '分支名' },
-              },
-            },
-            topics: {
-              type: 'array',
-              items: { type: 'string' },
-              description: '手动指定审查主题（可选）',
-            },
-            mode: {
-              type: 'string',
-              enum: ['incremental', 'full'],
-              description: '增量或全量模式（默认 incremental）',
-            },
-            forceRefresh: {
-              type: 'boolean',
-              description: '强制刷新缓存',
-            },
-          },
-          required: ['rawDiff', 'identifier', 'projectRoot'],
         },
       },
       {
@@ -758,39 +687,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           revisionId: input.revisionId,
           issuesCount: result.issues.length,
           published: input.publish,
-        });
-        return formatJsonResponse(result);
-      }
-
-      case 'review-raw-diff': {
-        const input = args as {
-          rawDiff: string;
-          identifier: string;
-          projectRoot: string;
-          metadata?: {
-            title?: string;
-            author?: string;
-            mergeRequestId?: string;
-            commitHash?: string;
-            branch?: string;
-          };
-          topics?: string[];
-          mode?: 'incremental' | 'full';
-          forceRefresh?: boolean;
-        };
-        const result = await reviewRawDiffTool.review({
-          rawDiff: input.rawDiff,
-          identifier: input.identifier,
-          projectRoot: input.projectRoot,
-          metadata: input.metadata,
-          topics: input.topics,
-          mode: input.mode || 'incremental',
-          forceRefresh: input.forceRefresh || false,
-        });
-        logger.info(`Tool '${name}' completed successfully`, {
-          identifier: input.identifier,
-          issuesCount: result.issues.length,
-          topics: result.identifiedTopics,
         });
         return formatJsonResponse(result);
       }

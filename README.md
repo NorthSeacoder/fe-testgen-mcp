@@ -241,9 +241,9 @@ EOF
 
 ### 可用工具
 
-本 MCP Server 提供 **12 个工具**，涵盖测试生成和代码审查的完整流程。
+本 MCP Server 提供 **11 个工具**，涵盖测试生成和代码审查的完整流程。
 
-> 💡 **新增 n8n/GitLab 集成工具**: 为支持 n8n 工作流与 GitLab 集成，新增 `review-raw-diff`、`analyze-raw-diff-test-matrix` 和 `generate-tests-from-raw-diff` 三个专用工具，直接接受外部传入的 diff 内容，无需依赖 Phabricator 或 Git 操作。详见 [N8N_GITLAB_INTEGRATION.md](./N8N_GITLAB_INTEGRATION.md)。
+> 💡 **新增 n8n/GitLab 集成工具**: 为支持 n8n 工作流与 GitLab 集成，新增 `analyze-raw-diff-test-matrix` 和 `generate-tests-from-raw-diff` 两个专用工具，直接接受外部传入的 diff 内容，无需依赖 Phabricator 或 Git 操作。详见 [N8N_GITLAB_INTEGRATION.md](./N8N_GITLAB_INTEGRATION.md)。
 
 > 💡 **架构优化**: 移除了 `detect-project-test-stack` 和 `resolve-path` 这两个内部工具，它们的功能已集成到需要它们的工具中（如 `analyze-test-matrix`），简化了 API 并提高了代码复用性。
 
@@ -347,51 +347,7 @@ EOF
 
 ---
 
-#### 4. review-raw-diff 🆕
-
-**功能：** 针对外部传入的 raw diff 进行代码审查，适配 n8n + GitLab / GitHub 等工作流。
-
-**参数：**
-```typescript
-{
-  rawDiff: string                 // Unified diff 文本（必需）
-  identifier: string              // 唯一标识符（例如 MR-123，用于状态存储）
-  projectRoot: string             // 项目根目录绝对路径
-  metadata?: {                    // 可选元数据（标题、作者、分支等）
-    title?: string
-    author?: string
-    mergeRequestId?: string
-    commitHash?: string
-    branch?: string
-  }
-  topics?: string[]               // 手动指定审查主题（可选）
-  mode?: 'incremental' | 'full'   // 增量或全量模式（默认 incremental）
-  forceRefresh?: boolean          // 强制刷新缓存（默认 false）
-}
-```
-
-**特性：**
-- ✅ 与 `review-frontend-diff` 相同的多 Agent 审查能力
-- ✅ 支持增量去重，自动过滤重复评论
-- ✅ 同一行的多条评论自动合并，使用 LLM 生成统一描述
-- ✅ 自动加载仓库级 prompt 配置，支持 Monorepo 子项目
-- ✅ 输出结构化的审查结果，便于 n8n 节点格式化并发布到 GitLab MR 评论
-
-**返回：**
-- 审查摘要与识别的主题
-- 稳定 ID、文件、行号、严重度、建议等字段的审查问题列表
-- 自动生成的测试建议
-- 元数据：模式、执行耗时、运行的 Agent、缓存命中情况
-
-**推荐工作流（n8n）**
-1. [GitLab 节点] 获取 MR Diff
-2. [review-raw-diff] 执行代码审查
-3. [Code 节点] 按需筛选/格式化评论
-4. [GitLab 节点] 发布 MR 评论
-
----
-
-#### 5. analyze-test-matrix
+#### 4. analyze-test-matrix
 
 **功能：** 分析代码变更的功能清单和测试矩阵，这是测试生成的第一步。
 

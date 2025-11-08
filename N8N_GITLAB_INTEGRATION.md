@@ -2,73 +2,23 @@
 
 ## 概述
 
-针对 n8n 工作流与 GitLab 集成场景，新增了**三个专用 MCP 工具**，无需依赖 Phabricator 或本地 Git 操作，直接接受外部传入的 diff 内容。
+针对 n8n 工作流与 GitLab 集成场景，新增了**两个专用 MCP 工具**用于测试生成，无需依赖 Phabricator 或本地 Git 操作，直接接受外部传入的 diff 内容。
+
+> ⚠️ **关于代码审查（CR）**：  
+> 代码审查功能目前仅支持 Phabricator 场景（使用 `review-frontend-diff` 工具）。  
+> 原因：
+> 1. Phabricator 的 diff 格式更标准，行号信息更准确
+> 2. 发布评论到 Phabricator 需要 diffId（必须通过 Phabricator API 获取）
+> 3. 外部传入的 diff 可能存在格式不一致导致行号偏移
+>
+> 如需对 GitLab MR 进行代码审查，建议：
+> - 方案 A：在 n8n 中实现轻量级的规则检查（ESLint/Prettier）
+> - 方案 B：通过 GitLab CI/CD 触发 MCP 工具，直接在项目仓库中执行
+> - 方案 C：等待后续支持（需要增强 diff 解析和行号映射的准确性）
 
 ## 新增工具
 
-### 1. `review-raw-diff` 🆕
-
-从外部传入的 raw diff 内容进行代码审查。
-
-#### 输入参数
-
-```json
-{
-  "rawDiff": "string (必需)",           // Unified diff 格式的原始文本
-  "identifier": "string (必需)",        // 唯一标识符（如 MR-123）
-  "projectRoot": "string (必需)",       // 项目根目录绝对路径
-  "metadata": {                          // 可选元数据
-    "title": "MR 标题",
-    "author": "作者名",
-    "mergeRequestId": "123",
-    "commitHash": "abc123",
-    "branch": "feature/xyz"
-  },
-  "topics": ["react", "typescript"],     // 可选，手动指定审查主题
-  "mode": "incremental",                 // 或 "full"
-  "forceRefresh": false                  // 是否强制刷新缓存
-}
-```
-
-#### 输出结果
-
-```json
-{
-  "summary": "Found 5 issues across 3 files",
-  "identifiedTopics": ["react", "typescript", "performance"],
-  "issues": [
-    {
-      "id": "...",
-      "file": "src/components/Button.tsx",
-      "line": 42,
-      "codeSnippet": "const onClick = () => { ... }",
-      "severity": "medium",
-      "topic": "react",
-      "message": "避免在渲染期间创建函数",
-      "suggestion": "使用 useCallback 包裹",
-      "confidence": 0.85
-    }
-  ],
-  "testingSuggestions": "建议为 Button 组件添加单元测试...",
-  "metadata": {
-    "mode": "incremental",
-    "agentsRun": ["react", "typescript", "performance"],
-    "duration": 4532,
-    "cacheHit": false
-  }
-}
-```
-
-**特性：**
-- ✅ 与 `review-frontend-diff` 相同的多 Agent 审查能力
-- ✅ 自动识别审查主题（React/TypeScript/性能/安全等）
-- ✅ 支持增量去重，避免重复评论
-- ✅ 同一行多个评论自动合并
-- ✅ 支持仓库级 prompt 配置、Monorepo 子项目
-
----
-
-### 2. `analyze-raw-diff-test-matrix`
+### 1. `analyze-raw-diff-test-matrix`
 
 从外部传入的 raw diff 内容分析测试矩阵。
 
