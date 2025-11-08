@@ -29,16 +29,22 @@ Frontend Phabricator Diff Review and Unit Test Generation MCP Server
 - ✅ 支持 Monorepo (pnpm/yarn/npm workspaces, Lerna, Nx, Rush)
 - ✅ 自动检测测试框架
 
-### 架构 V2（实验性）
-- 🧠 **ReAct Agent 引擎**：`src/core/react-engine.ts`，支持 Thought → Action → Observation 循环
-- 🛠️ **统一工具基类**：`BaseTool` + `ToolRegistry`，提供生命周期管理与指标采集
-- 🧱 **Pipeline DSL**：`config/pipelines.yaml` + `PipelineExecutor`，声明式编排工作流
-- 🧠 **Context & Memory**：`ContextStore` / `Memory` 管理短期上下文与长期记忆
-- 🔌 **CodeChangeSource 抽象**：统一 Phabricator / Git / Raw diff 接入
-- 📚 详细文档：`ARCHITECTURE_V2.md`、`REFACTOR_SUMMARY.md`
-- 🚀 体验入口：`src/index-v2.ts`（实验性 MCP Server，构建后可通过 `node dist/index-v2.js` 启动）
+### 架构 V2
+- 🧠 **ReAct Agent 引擎**：支持 Thought → Action → Observation 循环
+- 🛠️ **BaseTool 基类**：统一生命周期管理（beforeExecute, executeImpl, afterExecute, onError）
+- 📊 **Metrics 体系**：自动埋点，支持 Counter/Timer/Histogram/Gauge
+- 🗂️ **ToolRegistry**：集中管理所有工具，动态注册与检索
+- 🧱 **Pipeline DSL**：声明式工作流编排 (YAML 配置)
+- 🧠 **Context & Memory**：短期上下文与长期记忆管理
+- 🔌 **CodeChangeSource**：统一 Phabricator / Git / Raw diff 接入
+- 💉 **AppContext**：轻量级依赖注入容器
+- 📤 **Metrics 导出**：支持 JSON / Prometheus / Custom 格式，预留远程上传接口
 
-> 当前仍默认使用 V1 流程；可按需逐步迁移工具/Agent 到 V2 架构。
+**文档**：
+- `V2_REFACTOR_COMPLETED.md` - V2 重构完成报告
+- `ARCHITECTURE_V2.md` - 详细架构设计
+- `REFACTOR_SUMMARY.md` - 重构总结
+- `MIGRATION_GUIDE.md` - 迁移指南
 
 ## 安装
 
