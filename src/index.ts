@@ -24,6 +24,8 @@ import { WriteTestFileTool } from './tools/write-test-file.js';
 import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { AnalyzeCommitTestMatrixTool } from './tools/analyze-commit-test-matrix.js';
 import { RunTestsTool } from './tools/run-tests.js';
+import { AnalyzeRawDiffTestMatrixTool } from './tools/analyze-raw-diff-test-matrix.js';
+import { GenerateTestsFromRawDiffTool } from './tools/generate-tests-from-raw-diff.js';
 import { formatJsonResponse, formatErrorResponse, formatDiffResponse } from './utils/response-formatter.js';
 
 dotenv.config();
@@ -44,6 +46,8 @@ let writeTestFileTool: WriteTestFileTool;
 let fetchCommitChangesTool: FetchCommitChangesTool;
 let analyzeCommitTestMatrixTool: AnalyzeCommitTestMatrixTool;
 let runTestsTool: RunTestsTool;
+let analyzeRawDiffTestMatrixTool: AnalyzeRawDiffTestMatrixTool;
+let generateTestsFromRawDiffTool: GenerateTestsFromRawDiffTool;
 
 function initialize() {
   try {
@@ -121,9 +125,22 @@ function initialize() {
       stateManager,
       testMatrixAnalyzer
     );
+
+    analyzeRawDiffTestMatrixTool = new AnalyzeRawDiffTestMatrixTool(
+      resolvePathTool,
+      stateManager,
+      testMatrixAnalyzer
+    );
     
     generateTestsTool = new GenerateTestsTool(
       fetchDiffTool,
+      stateManager,
+      openaiClient,
+      embeddingClient,
+      config
+    );
+
+    generateTestsFromRawDiffTool = new GenerateTestsFromRawDiffTool(
       stateManager,
       openaiClient,
       embeddingClient,
@@ -341,6 +358,59 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'analyze-raw-diff-test-matrix',
+        description:
+          '🆕 从外部传入的 raw diff 内容分析测试矩阵（n8n / GitLab 专用）。\n\n' +
+          '💡 使用场景：\n' +
+          '• n8n 工作流中，GitLab 节点已获取 diff，无需再调用 fetch-diff\n' +
+          '• 直接接收任意来源的 unified diff 格式内容\n' +
+          '• 支持 GitLab MR、GitHub PR 等平台的 diff\n\n' +
+          '📋 推荐 n8n 工作流：\n' +
+          '1. [GitLab 节点] 获取 MR diff\n' +
+          '2. [此工具] 分析测试矩阵\n' +
+          '3. [generate-tests-from-raw-diff] 生成测试代码\n' +
+          '4. [GitLab 节点] 发布 MR 评论\n\n' +
+          '⚙️ 自动执行的步骤：\n' +
+          '• 解析 raw diff（unified diff 格式）\n' +
+          '• 过滤前端文件（.js/.ts/.vue/.css 等）\n' +
+          '• 检测测试框架（Vitest/Jest）\n' +
+          '• 分析功能清单和测试矩阵\n' +
+          '• 保存结果用于后续生成测试',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            rawDiff: {
+              type: 'string',
+              description: 'Unified diff 格式的原始文本（由 GitLab API 或其他平台提供）',
+            },
+            identifier: {
+              type: 'string',
+              description: '唯一标识符（如 MR ID "MR-123" 或 commit hash）',
+            },
+            projectRoot: {
+              type: 'string',
+              description: '项目根目录的绝对路径（必需，用于路径解析和测试框架检测）',
+            },
+            metadata: {
+              type: 'object',
+              description: '可选元数据（标题、作者、分支等）',
+              properties: {
+                title: { type: 'string', description: 'MR 标题' },
+                author: { type: 'string', description: '作者' },
+                mergeRequestId: { type: 'string', description: 'MR ID' },
+                commitHash: { type: 'string', description: 'commit hash' },
+                branch: { type: 'string', description: '分支名' },
+              },
+            },
+            forceRefresh: {
+              type: 'boolean',
+              description: '强制刷新缓存',
+            },
+          },
+          required: ['rawDiff', 'identifier', 'projectRoot'],
+        },
+      },
+      {
         name: 'generate-tests',
         description: 
           '基于测试矩阵生成具体的单元测试代码。\n' +
@@ -387,6 +457,72 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['revisionId'],
+        },
+      },
+      {
+        name: 'generate-tests-from-raw-diff',
+        description:
+          '🆕 一次调用完成 diff 分析 + 测试生成（n8n / GitLab 专用）。\n\n' +
+          '💡 使用场景：\n' +
+          '• n8n 工作流中，GitLab 节点已获取 diff 与 MR 信息\n' +
+          '• 希望直接生成测试代码，无需额外步骤\n' +
+          '• 可与 analyze-raw-diff-test-matrix 组合，支持分步或一体化流程\n\n' +
+          '⚙️ 自动执行的步骤：\n' +
+          '• 解析 raw diff 并过滤前端文件\n' +
+          '• 检测测试框架（Vitest/Jest）\n' +
+          '• （可选）先运行测试矩阵分析，支持增量缓存\n' +
+          '• 识别测试场景并生成多场景测试代码\n' +
+          '• 支持手动指定测试场景、最大测试数量、增量模式',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            rawDiff: {
+              type: 'string',
+              description: 'Unified diff 格式的原始文本',
+            },
+            identifier: {
+              type: 'string',
+              description: '唯一标识符（如 MR ID 或 commit hash，用于状态管理）',
+            },
+            projectRoot: {
+              type: 'string',
+              description: '项目根目录的绝对路径',
+            },
+            metadata: {
+              type: 'object',
+              description: '可选元数据（标题、作者、分支等）',
+              properties: {
+                title: { type: 'string', description: 'MR 标题' },
+                author: { type: 'string', description: '作者' },
+                mergeRequestId: { type: 'string', description: 'MR ID' },
+                commitHash: { type: 'string', description: 'commit hash' },
+                branch: { type: 'string', description: '分支名' },
+              },
+            },
+            scenarios: {
+              type: 'array',
+              items: { type: 'string' },
+              description: '手动指定测试场景（如 happy-path, edge-case 等）',
+            },
+            mode: {
+              type: 'string',
+              enum: ['incremental', 'full'],
+              description: '增量模式优先复用已有测试结果',
+            },
+            maxTests: {
+              type: 'number',
+              description: '最大测试数量，超出后按置信度截断',
+            },
+            analyzeMatrix: {
+              type: 'boolean',
+              description: '是否在生成前执行一次测试矩阵分析（默认 true）',
+            },
+            forceRefresh: {
+              type: 'boolean',
+              description: '强制刷新缓存，忽略已保存的矩阵/测试状态',
+            },
+          },
+          required: ['rawDiff', 'identifier', 'projectRoot'],
         },
       },
       {
@@ -602,6 +738,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return formatJsonResponse(result);
       }
 
+      case 'analyze-raw-diff-test-matrix': {
+        const input = args as {
+          rawDiff: string;
+          identifier: string;
+          projectRoot: string;
+          metadata?: {
+            title?: string;
+            author?: string;
+            mergeRequestId?: string;
+            commitHash?: string;
+            branch?: string;
+          };
+          forceRefresh?: boolean;
+        };
+        const result = await analyzeRawDiffTestMatrixTool.analyze({
+          rawDiff: input.rawDiff,
+          identifier: input.identifier,
+          projectRoot: input.projectRoot,
+          metadata: input.metadata,
+          forceRefresh: input.forceRefresh || false,
+        });
+        logger.info(`Tool '${name}' completed successfully`, {
+          identifier: input.identifier,
+          features: result.matrix.summary.totalFeatures,
+          scenarios: result.matrix.summary.totalScenarios,
+          estimatedTests: result.matrix.summary.estimatedTests,
+        });
+        return formatJsonResponse(result);
+      }
+
       case 'generate-tests': {
         const input = args as {
           revisionId: string;
@@ -621,6 +787,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         logger.info(`Tool '${name}' completed successfully`, {
           revisionId: input.revisionId,
+          testsCount: result.tests.length,
+          scenarios: result.identifiedScenarios,
+        });
+        return formatJsonResponse(result);
+      }
+
+      case 'generate-tests-from-raw-diff': {
+        const input = args as {
+          rawDiff: string;
+          identifier: string;
+          projectRoot: string;
+          metadata?: {
+            title?: string;
+            author?: string;
+            mergeRequestId?: string;
+            commitHash?: string;
+            branch?: string;
+          };
+          scenarios?: string[];
+          mode?: 'incremental' | 'full';
+          maxTests?: number;
+          analyzeMatrix?: boolean;
+          forceRefresh?: boolean;
+        };
+        const result = await generateTestsFromRawDiffTool.generate({
+          rawDiff: input.rawDiff,
+          identifier: input.identifier,
+          projectRoot: input.projectRoot,
+          metadata: input.metadata,
+          scenarios: input.scenarios,
+          mode: input.mode || 'incremental',
+          maxTests: input.maxTests,
+          analyzeMatrix: input.analyzeMatrix !== undefined ? input.analyzeMatrix : true,
+          forceRefresh: input.forceRefresh || false,
+        });
+        logger.info(`Tool '${name}' completed successfully`, {
+          identifier: input.identifier,
           testsCount: result.tests.length,
           scenarios: result.identifiedScenarios,
         });

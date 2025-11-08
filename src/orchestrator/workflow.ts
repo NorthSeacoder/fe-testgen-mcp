@@ -116,16 +116,24 @@ export class Workflow {
     context: WorkflowContext & {
       framework: string;
       existingTestContext?: string;
+      scenarios?: string[];
     }
   ): Promise<WorkflowResult<TestCase>> {
     const startTime = Date.now();
 
-    // 1. 识别测试场景
-    logger.info('Identifying test scenarios...');
-    const { testScenarios } = await this.topicIdentifier.identifyTopics(
-      context.diff.raw,
-      context.commitMessage
-    );
+    // 1. 识别测试场景（如果未手动指定）
+    let testScenarios: string[];
+    if (context.scenarios && context.scenarios.length > 0) {
+      logger.info('Using manually specified test scenarios', { scenarios: context.scenarios });
+      testScenarios = context.scenarios;
+    } else {
+      logger.info('Identifying test scenarios...');
+      const result = await this.topicIdentifier.identifyTopics(
+        context.diff.raw,
+        context.commitMessage
+      );
+      testScenarios = result.testScenarios;
+    }
 
     // 2. 选择要运行的 Agent
     const agentsToRun: BaseAgent<TestCase>[] = [];

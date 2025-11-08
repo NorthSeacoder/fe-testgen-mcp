@@ -241,7 +241,9 @@ EOF
 
 ### 可用工具
 
-本 MCP Server 提供 9 个工具，涵盖测试生成和代码审查的完整流程。
+本 MCP Server 提供 **11 个工具**，涵盖测试生成和代码审查的完整流程。
+
+> 💡 **新增 n8n/GitLab 集成工具**: 为支持 n8n 工作流与 GitLab 集成，新增 `analyze-raw-diff-test-matrix` 和 `generate-tests-from-raw-diff` 两个专用工具，直接接受外部传入的 diff 内容，无需依赖 Phabricator 或 Git 操作。详见 [N8N_GITLAB_INTEGRATION.md](./N8N_GITLAB_INTEGRATION.md)。
 
 > 💡 **架构优化**: 移除了 `detect-project-test-stack` 和 `resolve-path` 这两个内部工具，它们的功能已集成到需要它们的工具中（如 `analyze-test-matrix`），简化了 API 并提高了代码复用性。
 
@@ -524,6 +526,91 @@ EOF
 - 生成测试后自动执行验证
 - CI/CD 流程中执行测试套件
 - 验证代码质量门控
+
+---
+
+#### 10. analyze-raw-diff-test-matrix 🆕
+
+**功能：** 从外部传入的 raw diff 内容分析测试矩阵（专为 n8n/GitLab 工作流设计）。
+
+**参数：**
+```typescript
+{
+  rawDiff: string             // Unified diff 格式的原始文本（必需）
+  identifier: string          // 唯一标识符，如 MR ID（必需）
+  projectRoot: string         // 项目根目录绝对路径（必需）
+  metadata?: {                // 可选元数据
+    title?: string            // MR 标题
+    author?: string           // 作者
+    mergeRequestId?: string   // MR ID
+    commitHash?: string       // commit hash
+    branch?: string           // 分支名
+  }
+  forceRefresh?: boolean      // 强制刷新缓存（默认 false）
+}
+```
+
+**返回：**
+- 功能清单和测试矩阵
+- 测试框架信息（Vitest/Jest）
+- 统计信息（功能数、场景数、预估测试数）
+
+**使用场景：**
+- n8n 工作流中，GitLab 节点已获取 diff
+- 支持 GitLab MR、GitHub PR 等平台的 diff
+- 分步式工作流，先分析后决策
+
+**推荐 n8n 工作流：**
+1. [GitLab 节点] 获取 MR diff
+2. [此工具] 分析测试矩阵
+3. [Code 节点] 根据矩阵决策
+4. [MCP: generate-tests-from-raw-diff] 生成测试
+
+---
+
+#### 11. generate-tests-from-raw-diff 🆕
+
+**功能：** 从外部传入的 raw diff 一次性完成分析 + 测试生成（端到端工具）。
+
+**参数：**
+```typescript
+{
+  rawDiff: string             // Unified diff 格式的原始文本（必需）
+  identifier: string          // 唯一标识符（必需）
+  projectRoot: string         // 项目根目录（必需）
+  metadata?: {                // 可选元数据
+    title?: string
+    author?: string
+    mergeRequestId?: string
+    commitHash?: string
+    branch?: string
+  }
+  scenarios?: string[]        // 手动指定测试场景（可选）
+  mode?: 'incremental' | 'full'  // 增量或全量模式
+  maxTests?: number           // 最大测试数量
+  analyzeMatrix?: boolean     // 是否先分析矩阵（默认 true）
+  forceRefresh?: boolean      // 强制刷新缓存
+}
+```
+
+**返回：**
+- 生成的测试用例列表
+- 识别的测试场景
+- 测试代码、文件路径、场景类型
+- 统计信息
+
+**使用场景：**
+- n8n 工作流中，GitLab 节点已获取 diff
+- 希望直接生成测试代码，无需额外步骤
+- 端到端式工作流，简洁高效
+
+**推荐 n8n 工作流：**
+1. [GitLab 节点] 获取 MR diff
+2. [此工具] 直接生成测试代码
+3. [Code 节点] 格式化为 GitLab 评论
+4. [GitLab 节点] 发布 MR 评论
+
+**详细文档：** 查看 [N8N_GITLAB_INTEGRATION.md](./N8N_GITLAB_INTEGRATION.md) 了解完整的 n8n 工作流配置和示例。
 
 ---
 
