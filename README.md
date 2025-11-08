@@ -14,12 +14,15 @@ Frontend Phabricator Diff Review and Unit Test Generation MCP Server
 - ✅ 智能合并同行评论
 - ✅ 自动发布到 Phabricator
 
+> ⚠️ **注意**：代码审查工具仅支持 Phabricator Diff（需要通过 `fetch-diff` 获取 diffId，确保行号准确）。
+
 ### 测试生成
 - ✅ 智能分析测试矩阵
 - ✅ 生成多场景测试用例 (正常/边界/异常/状态变更)
 - ✅ 支持 Vitest/Jest
 - ✅ Embedding 增强的测试生成
 - ✅ 参考现有测试风格
+- ✅ 支持 n8n + GitLab/GitHub 集成（接受外部 raw diff）
 
 ### 项目支持
 - ✅ 自动检测项目根目录

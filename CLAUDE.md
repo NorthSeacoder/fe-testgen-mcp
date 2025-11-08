@@ -125,6 +125,14 @@ fetch-commit-changes → analyze-commit-test-matrix → generate-tests → write
 fetch-commit-changes → analyze-commit-test-matrix → generate-tests → write-test-file → run-tests
 ```
 
+### 工作流 4: n8n + GitLab 测试生成
+```typescript
+// n8n 工作流
+[GitLab: Get MR Diff] → [MCP: generate-tests-from-raw-diff] → [GitLab: Post Comment]
+```
+
+**注意**：代码审查（CR）仅支持 Phabricator，因为需要 diffId 才能发布评论，且行号映射更准确。
+
 ## 关键工具
 
 ### 代码获取
@@ -144,6 +152,10 @@ fetch-commit-changes → analyze-commit-test-matrix → generate-tests → write
 ### 发布和集成
 - **publish-comments**: 发布审查评论到 Phabricator
 
+### n8n Test Generation
+- **analyze-raw-diff-test-matrix**: 接受外部 raw diff，分析功能与测试矩阵（GitLab/GitHub 集成）
+- **generate-tests-from-raw-diff**: 一次调用完成 raw diff 分析与测试生成，适合 n8n 工作流
+
 ## 重要文件
 
 ### 配置文件
@@ -154,9 +166,10 @@ fetch-commit-changes → analyze-commit-test-matrix → generate-tests → write
 
 ### 文档
 - `README.md` - 完整使用指南和 API 文档
+- `N8N_GITLAB_INTEGRATION.md` - n8n + GitLab 集成文档（测试生成专用）
+- `WORKFLOW_EXAMPLES.md` - 完整工作流示例
 - `ARCHITECTURE_REDESIGN.md` - 架构设计文档（ReAct 模式规划）
 - `IMPLEMENTATION_SUMMARY.md` - 实施总结和问题修复
-- `WORKFLOW_EXAMPLES.md` - 完整工作流示例
 
 ## 关键技术点
 
