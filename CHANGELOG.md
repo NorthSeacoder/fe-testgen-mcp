@@ -16,7 +16,7 @@
 #### n8n/GitLab/GitHub 集成
 
 - **新增**: `analyze-raw-diff-test-matrix` - 接受外部 raw diff 的测试矩阵分析工具
-- **新增**: `generate-tests-from-raw-diff` - 端到端测试生成工具（支持 n8n 工作流）
+- **新增**: `generate-tests-from-raw-diff` - 一体化单元测试生成工具（支持 n8n 工作流）
 - **新增**: `N8N_INTEGRATION.md` - 完整的 n8n 集成文档，包含 GitLab MR 和 GitHub PR 自动化示例
 
 ### 📊 统计

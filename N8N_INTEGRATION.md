@@ -20,7 +20,7 @@
 n8n 是一个开源的工作流自动化工具，支持通过节点组合实现复杂的自动化流程。本 MCP Server 提供了两个专为 n8n 集成设计的工具：
 
 1. **analyze-raw-diff-test-matrix** - 仅分析测试矩阵（轻量级，用于决策）
-2. **generate-tests-from-raw-diff** - 端到端生成测试（包含矩阵分析 + 测试生成）
+2. **generate-tests-from-raw-diff** - 一体化生成单元测试（包含矩阵分析 + 测试生成）
 
 这两个工具接受外部传入的 raw diff 文本，无需依赖 Phabricator，适合与 GitLab、GitHub 等平台集成。
 
@@ -118,12 +118,12 @@ curl -X POST http://localhost:3000/mcp \
 
 ### generate-tests-from-raw-diff
 
-**用途**: 端到端生成测试（可选先分析矩阵）
+**用途**: 一体化生成单元测试（可选先分析矩阵）
 
 **适用场景**:
-- 一次性完成分析 + 测试生成
+- 一次性完成分析 + 单元测试生成
 - 自动化 CI/CD 流程
-- 快速生成测试代码
+- 快速生成单元测试代码
 
 **输入参数**:
 ```typescript

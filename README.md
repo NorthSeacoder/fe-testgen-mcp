@@ -372,7 +372,7 @@ tracking:
 > - ✅ **write-test-file** - 将生成的测试代码写入磁盘
 > - ✅ **run-tests** - 执行测试命令并解析结果
 > - ✅ **analyze-raw-diff-test-matrix** - n8n/GitLab 集成的测试矩阵分析工具
-> - ✅ **generate-tests-from-raw-diff** - n8n/GitLab 集成的端到端测试生成工具
+> - ✅ **generate-tests-from-raw-diff** - n8n/GitLab 集成的一体化单元测试生成工具
 > - ✅ **n8n 集成指南** - 详见 [N8N_INTEGRATION.md](./N8N_INTEGRATION.md)
 > - 🚧 **其他工具** - 待实现（更多 n8n 集成、测试增强等）
 
@@ -745,7 +745,7 @@ tracking:
 
 #### 11. generate-tests-from-raw-diff 🆕
 
-**功能：** 从外部传入的 raw diff 一次性完成分析 + 测试生成（端到端工具）。
+**功能：** 从外部传入的 raw diff 一次性完成分析 + 单元测试生成（一体化工具）。
 
 **参数：**
 ```typescript
@@ -776,8 +776,8 @@ tracking:
 
 **使用场景：**
 - n8n 工作流中，GitLab 节点已获取 diff
-- 希望直接生成测试代码，无需额外步骤
-- 端到端式工作流，简洁高效
+- 希望直接生成单元测试代码，无需额外步骤
+- 一体化工作流，简洁高效
 
 **推荐 n8n 工作流：**
 1. [GitLab 节点] 获取 MR diff
