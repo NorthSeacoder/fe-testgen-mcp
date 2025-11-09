@@ -62,6 +62,9 @@ export const TestMatrixAnalysis = z.object({
     revisionId: z.string(),
     framework: z.string().nullable(),
     duration: z.number(),
+    projectRoot: z.string().optional(),
+    isMonorepo: z.boolean().optional(),
+    workspaceType: z.enum(['pnpm', 'yarn', 'npm', 'lerna', 'rush']).optional(),
     commitInfo: z.object({
       hash: z.string(),
       author: z.string(),
