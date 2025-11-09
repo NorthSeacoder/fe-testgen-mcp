@@ -22,7 +22,7 @@ export interface Thought {
 }
 
 export interface Action {
-  type: 'call_tool' | 'respond' | 'terminate' | 'ask_user';
+  type: 'call_tool' | 'respond' | 'terminate' | 'ask_user' | 'continue';
   toolName?: string;
   parameters?: Record<string, unknown>;
   message?: string;

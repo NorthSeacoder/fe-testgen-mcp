@@ -17,8 +17,8 @@ import { PhabricatorClient } from './clients/phabricator.js';
 import { EmbeddingClient } from './clients/embedding.js';
 import { Cache } from './cache/cache.js';
 import { StateManager } from './state/manager.js';
-import { FetchDiffToolV2 } from './tools/v2/fetch-diff.js';
-import { FetchCommitChangesToolV2 } from './tools/v2/fetch-commit-changes.js';
+import { FetchDiffTool } from './tools/fetch-diff.js';
+import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { getEnv, validateAiConfig } from './config/env.js';
 import { loadConfig } from './config/loader.js';
 import { logger } from './utils/logger.js';
@@ -89,18 +89,18 @@ function initialize() {
 
   // 注册工具
   toolRegistry = new ToolRegistry();
-  toolRegistry.register(new FetchDiffToolV2(phabricator, cache));
-  toolRegistry.register(new FetchCommitChangesToolV2());
+  toolRegistry.register(new FetchDiffTool(phabricator, cache));
+  toolRegistry.register(new FetchCommitChangesTool());
 
   getMetrics().recordCounter('server.initialization.success', 1);
   logger.info('Initialization complete', { 
-    tools: toolRegistry.list().length,
+    tools: toolRegistry.listMetadata().length,
     embeddingEnabled: config.embedding.enabled,
   });
 }
 
 const server = new Server(
-  { name: 'fe-testgen-mcp', version: '2.0.0' },
+  { name: 'fe-testgen-mcp', version: '3.0.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -117,7 +117,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
   logger.info('Tool called', { tool: name });
   getMetrics().recordCounter('tool.called', 1, { tool: name });
 
-  const tool = toolRegistry.get(name);
+  const tool = await toolRegistry.get(name);
   if (!tool) {
     getMetrics().recordCounter('tool.not_found', 1, { tool: name });
     throw new Error(`Tool "${name}" not found`);

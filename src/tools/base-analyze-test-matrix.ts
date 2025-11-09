@@ -1,15 +1,15 @@
 /**
- * BaseAnalyzeTestMatrixV2 - 测试矩阵分析公共逻辑
+ * BaseAnalyzeTestMatrix - 测试矩阵分析公共逻辑
  */
 
-import { ResolvePathTool } from '../resolve-path.js';
-import { detectProjectTestStack } from '../detect-stack.js';
-import { TestMatrixAnalyzer } from '../../agents/test-matrix-analyzer.js';
-import { StateManager } from '../../state/manager.js';
-import { getTestStackDetectionPath } from '../../utils/project-root.js';
-import type { TestMatrixAnalysis } from '../../schemas/test-matrix.js';
-import type { Diff } from '../../schemas/diff.js';
-import { logger } from '../../utils/logger.js';
+import { ResolvePathTool } from './resolve-path.js';
+import { detectProjectTestStack } from './detect-stack.js';
+import { TestMatrixAnalyzer } from '../agents/test-matrix-analyzer.js';
+import { StateManager } from '../state/manager.js';
+import { getTestStackDetectionPath } from '../utils/project-root.js';
+import type { TestMatrixAnalysis } from '../schemas/test-matrix.js';
+import type { Diff } from '../schemas/diff.js';
+import { logger } from '../utils/logger.js';
 
 export interface AnalyzeContext {
   diff: Diff;
@@ -30,7 +30,7 @@ export interface AnalyzeContext {
   };
 }
 
-export class BaseAnalyzeTestMatrixV2 {
+export class BaseAnalyzeTestMatrix {
   constructor(
     private resolvePathTool: ResolvePathTool,
     private stateManager: StateManager,

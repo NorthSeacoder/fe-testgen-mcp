@@ -1,5 +1,5 @@
 /**
- * TestAgent v2 - 基于 ReAct 模式重构的测试生成 Agent
+ * TestAgent - 基于 ReAct 模式的测试生成 Agent
  *
  * 职责：
  * 1. 分析代码变更
@@ -14,15 +14,15 @@
  * - 支持增量模式和去重
  */
 
-import { OpenAIClient } from '../../clients/openai.js';
-import { EmbeddingClient } from '../../clients/embedding.js';
-import { StateManager } from '../../state/manager.js';
-import { CodeChangeSource } from '../../core/code-change-source.js';
-import { ContextStore, AgentContext, Thought, Action, Observation } from '../../core/context.js';
-import { logger } from '../../utils/logger.js';
-import { getMetrics } from '../../utils/metrics.js';
-import type { TestCase } from '../../schemas/test-plan.js';
-import type { Diff } from '../../schemas/diff.js';
+import { OpenAIClient } from '../clients/openai.js';
+import { EmbeddingClient } from '../clients/embedding.js';
+import { StateManager } from '../state/manager.js';
+import { CodeChangeSource } from '../core/code-change-source.js';
+import { ContextStore, AgentContext, Thought, Action, Observation } from '../core/context.js';
+import { logger } from '../utils/logger.js';
+import { getMetrics } from '../utils/metrics.js';
+import type { TestCase } from '../schemas/test-plan.js';
+import type { Diff } from '../schemas/diff.js';
 
 export interface TestAgentConfig {
   maxSteps: number;
@@ -42,7 +42,7 @@ export interface TestAgentResult {
   context: AgentContext;
 }
 
-export class TestAgentV2 {
+export class TestAgent {
   constructor(
     private _llm: OpenAIClient,
     private _embedding: EmbeddingClient,
@@ -60,7 +60,7 @@ export class TestAgentV2 {
     const sessionId = this.generateSessionId();
     const metadata = source.getMetadata();
 
-    logger.info('[TestAgentV2] Starting test generation', {
+    logger.info('[TestAgent] Starting test generation', {
       source: metadata.source,
       identifier: metadata.identifier,
       mode: config.mode,
@@ -72,7 +72,7 @@ export class TestAgentV2 {
     });
 
     // 创建上下文
-    const context = this.contextStore.create(sessionId, 'test-agent-v2', 'Generate unit tests', {
+    const context = this.contextStore.create(sessionId, 'test-agent', 'Generate unit tests', {
       goal: 'Analyze code changes and generate comprehensive unit tests',
       maxSteps: config.maxSteps,
       initialData: {
@@ -141,7 +141,7 @@ export class TestAgentV2 {
         context,
       };
     } catch (error) {
-      logger.error('[TestAgentV2] Execution failed', { error });
+      logger.error('[TestAgent] Execution failed', { error });
 
       getMetrics().recordCounter('test_agent.execution.completed', 1, {
         source: metadata.source,
@@ -160,7 +160,7 @@ export class TestAgentV2 {
    * 分析测试矩阵
    */
   private async analyzeTestMatrix(diff: Diff, context: AgentContext): Promise<unknown> {
-    logger.info('[TestAgentV2] Analyzing test matrix');
+    logger.info('[TestAgent] Analyzing test matrix');
 
     // TODO: 调用 TestMatrixAnalyzer
     // 这里简化处理
@@ -186,7 +186,7 @@ export class TestAgentV2 {
     _config: TestAgentConfig,
     context: AgentContext
   ): Promise<TestCase[]> {
-    logger.info('[TestAgentV2] Generating test cases');
+    logger.info('[TestAgent] Generating test cases');
 
     // TODO: 调用测试生成 Agent
     // 这里返回空数组作为示例
@@ -204,7 +204,7 @@ export class TestAgentV2 {
    * 写入测试文件
    */
   private async writeTestFiles(tests: TestCase[], context: AgentContext): Promise<string[]> {
-    logger.info('[TestAgentV2] Writing test files');
+    logger.info('[TestAgent] Writing test files');
 
     // TODO: 调用 WriteTestFileTool
     const filesWritten: string[] = [];
@@ -223,7 +223,7 @@ export class TestAgentV2 {
    * 执行测试
    */
   private async runTests(files: string[], context: AgentContext): Promise<unknown> {
-    logger.info('[TestAgentV2] Running tests');
+    logger.info('[TestAgent] Running tests');
 
     // TODO: 调用 RunTestsTool
     this.addAction(context, {

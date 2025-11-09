@@ -1,15 +1,15 @@
 /**
- * FetchDiffTool v2 - 基于 BaseTool 重构
+ * FetchDiffTool - 基于 BaseTool 的重构版本
  */
 
-import { BaseTool, ToolMetadata } from '../../core/base-tool.js';
-import { PhabricatorClient } from '../../clients/phabricator.js';
-import { Cache } from '../../cache/cache.js';
-import { parseDiff, generateNumberedDiff } from '../../utils/diff-parser.js';
-import { computeContentHash } from '../../utils/fingerprint.js';
-import type { Diff } from '../../schemas/diff.js';
-import { isFrontendFile } from '../../schemas/diff.js';
-import { logger } from '../../utils/logger.js';
+import { BaseTool, ToolMetadata } from '../core/base-tool.js';
+import { PhabricatorClient } from '../clients/phabricator.js';
+import { Cache } from '../cache/cache.js';
+import { parseDiff, generateNumberedDiff } from '../utils/diff-parser.js';
+import { computeContentHash } from '../utils/fingerprint.js';
+import type { Diff } from '../schemas/diff.js';
+import { isFrontendFile } from '../schemas/diff.js';
+import { logger } from '../utils/logger.js';
 
 export interface FetchDiffInput {
   revisionId: string;
@@ -21,7 +21,7 @@ export interface FetchDiffOutput {
   source: 'cache' | 'phabricator';
 }
 
-export class FetchDiffToolV2 extends BaseTool<FetchDiffInput, FetchDiffOutput> {
+export class FetchDiffTool extends BaseTool<FetchDiffInput, FetchDiffOutput> {
   constructor(
     private phabClient: PhabricatorClient,
     private cache: Cache
@@ -60,7 +60,7 @@ export class FetchDiffToolV2 extends BaseTool<FetchDiffInput, FetchDiffOutput> {
         required: ['revisionId'],
       },
       category: 'code-retrieval',
-      version: '2.0.0',
+      version: '3.0.0',
     };
   }
 

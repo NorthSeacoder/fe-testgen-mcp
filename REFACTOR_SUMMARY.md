@@ -1,8 +1,8 @@
-# 架构重构总结 - fe-testgen-mcp V2
+# 架构重构总结 - fe-testgen-mcp
 
 ## 🎯 重构目标与成果
 
-本次重构的核心目标是将 fe-testgen-mcp 从 V1 升级到 V2 架构，实现以下关键改进：
+本次重构的核心目标是将 fe-testgen-mcp 统一到现代化架构，实现以下关键改进：
 
 1. ✅ **Agent 层真正 ReAct 化** - 引入思考→行动→观察循环
 2. ✅ **工具层统一抽象** - BaseTool 基类与生命周期管理
@@ -119,60 +119,65 @@ pipelines:
   - RawDiffSource（GitLab/GitHub）
 - **目标**：TestAgent V2 不再关心变更来源
 
-### 6. V2 工具与 Agent
+### 6. 统一的工具与 Agent
 
-#### src/tools/v2/fetch-diff.ts
-- 基于 BaseTool 重构的 FetchDiffTool
-- 演示如何继承 BaseTool
-- 保留原有功能（过滤前端文件、计算指纹）
+#### src/tools/fetch-diff.ts
+- 基于 BaseTool 构建的 FetchDiffTool
+- 支持缓存、指纹计算、前端文件过滤
+- 提供 numbered diff 以保证审查行号准确
 
-#### src/agents/v2/test-agent.ts
+#### src/tools/fetch-commit-changes.ts
+- 基于 BaseTool 的 Git 变更获取工具
+- 自动解析 commit 元信息与带行号 diff
+
+#### src/tools/base-analyze-test-matrix.ts
+- 测试矩阵分析的公共基类
+- 封装项目根目录解析、测试栈检测、缓存
+
+#### src/agents/test-agent.ts
 - 基于 ReAct 模式的 TestAgent
-- 支持多种 CodeChangeSource
-- 支持完整流程：分析→生成→写入→执行
+- 支持多种 CodeChangeSource，完整覆盖分析→生成→写入→执行流程
+- 结合 Metrics 记录执行数据
 
 ## 📊 架构对比
 
-| 维度 | V1 | V2 |
-|------|----|----|
+| 维度 | V1（旧） | 现在（统一） |
+|------|---------|----------|
 | **工具基类** | 无，手动处理 | BaseTool 统一抽象 |
 | **错误处理** | 分散在各工具 | 统一模板方法 |
 | **日志** | 手动 logger.info | 自动记录 |
 | **Metrics** | 无 | 自动收集 |
-| **工具注册** | 硬编码在 index.ts | ToolRegistry 集中管理 |
+| **工具注册** | 硬编码在 index.ts | ToolRegistry（支持惰性加载） |
 | **Agent 模式** | 单次 prompt 调用 | ReAct 循环 |
-| **工作流** | 硬编码逻辑 | YAML DSL 配置化 |
+| **工作流** | 硬编码逻辑 | YAML DSL（并行/循环/分支）|
 | **上下文管理** | 无 | ContextStore + Memory |
 | **可观测性** | 有限 | Metrics + 结构化日志 |
+| **性能优化** | 无 | 惰性加载、并行执行、分层缓存 |
 
 ## 🔄 迁移策略
 
 ### 向后兼容
 
-- ✅ 保留所有 V1 工具和 Agent
-- ✅ V2 组件放在独立目录（`core/`, `tools/v2/`, `agents/v2/`）
-- ✅ 通过配置或环境变量切换版本
-- ✅ 渐进式迁移，避免大爆炸式重构
+- ✅ LegacyToolAdapter 仍可用于兼容极少数旧接口
+- ✅ 所有工具、Agent 已统一至主目录，导入路径一致
+- ✅ 迁移指南详见 `MIGRATION_COMPLETED.md`
 
-### 迁移步骤
+### 迁移步骤（全部完成）
 
 **阶段 1**: 基础设施就绪（✅ 已完成）
 - Metrics、BaseTool、Context、ReActEngine、Pipeline
 
-**阶段 2**: 工具层迁移（🔄 进行中）
-- 优先迁移高频工具（fetch-diff ✅, review-diff, generate-tests）
-- 使用 LegacyToolAdapter 包装现有工具
+**阶段 2**: 工具层迁移（✅ 已完成）
+- fetch-diff、fetch-commit-changes、analyze-test-matrix 基础能力统一
 
-**阶段 3**: Agent 层重构（🔄 进行中）
-- TestAgent V2 ✅
-- ReviewAgent V2（计划中）
+**阶段 3**: Agent 层重构（✅ 已完成）
+- TestAgent 统一到主目录，结合 ReActEngine
 
-**阶段 4**: Pipeline 集成（📅 计划中）
-- 将现有工作流迁移到 YAML DSL
-- 在 MCP Server 中集成 PipelineExecutor
+**阶段 4**: Pipeline 集成（✅ 已完成）
+- 支持 YAML DSL、并行执行、循环、分支
 
-**阶段 5**: 废弃 V1（📅 未来）
-- 充分验证 V2 稳定性后逐步废弃 V1
+**阶段 5**: 废弃 V1（✅ 已完成）
+- 删除 `src/tools/v2`、`src/agents/v2`，统一使用 v3 架构
 
 ## 📈 性能与质量改进
 
@@ -220,19 +225,24 @@ pipelines:
 - [ ] Web UI 仪表盘
 - [ ] Prometheus + Grafana 集成
 
-## 📚 新增文档
+## 📚 相关文档
 
-1. **ARCHITECTURE_V2.md** - V2 架构完整文档
-   - 设计理念
-   - 核心组件详解
-   - 使用示例
-   - 迁移指南
+1. **MIGRATION_COMPLETED.md** - 架构迁移完成报告
+   - 完成的所有任务（并行、循环、分支、惰性加载、LLM批处理、缓存优化）
+   - 架构对比
+   - 使用指南
+   - 升级指南
 
 2. **REFACTOR_SUMMARY.md**（本文档） - 重构总结
    - 新增组件列表
    - 架构对比
-   - 迁移策略
-   - 下一步计划
+   - 迁移进度
+   - 性能优化
+
+3. **ARCHITECTURE_REDESIGN.md** - 架构设计文档
+   - 长期规划
+   - 设计理念
+   - 扩展方向
 
 ## 🎓 最佳实践
 
@@ -257,32 +267,25 @@ pipelines:
 2. 确保引用的工具已注册
 3. 添加集成测试
 
-## 🐛 已知问题与限制
+## ✅ 已完成的性能优化
 
-### 当前限制
+1. **惰性加载工具** - ToolRegistry 支持 `registerLazy`，首次调用时才初始化，降低启动时间
+2. **并行执行** - Pipeline 支持 `type: parallel`，多步骤并发运行
+3. **循环与分支** - Pipeline 支持 `type: loop` 和 `type: branch`
+4. **LLM 批处理** - 通过并行执行减少往返时间
+5. **分层缓存** - 工具级、状态级多级缓存策略
 
-1. **ReActEngine Action 解析**
-   - 当前使用简单的正则匹配
-   - 生产环境应使用 Function Calling 或 Structured Output
+## 🚀 未来改进
 
-2. **Pipeline 功能**
-   - 尚未支持并行执行
-   - 条件表达式功能有限
-
-3. **Metrics 导出**
-   - 尚未实现 Prometheus exporter
-   - 仅支持内存存储
-
-### 未来改进
-
-1. 增强 ReActEngine 的行动决策能力
-2. 完善 Pipeline 的并行和分支能力
-3. 集成外部监控系统
+1. 完善 ReActEngine 的行动决策能力（Function Calling 或 Structured Output）
+2. 增加 Prometheus exporter（目前仅内存实现）
+3. 集成外部监控系统（OpenTelemetry、Sentry）
 4. 添加更多生命周期钩子
+5. 缓存预热策略
 
 ## 📞 贡献指南
 
-参见 `ARCHITECTURE_V2.md` 第13节：贡献指南
+参见 `MIGRATION_COMPLETED.md` 与 `ARCHITECTURE_REDESIGN.md` 的贡献章节
 
 ## 📄 许可证
 
@@ -290,6 +293,6 @@ MIT License
 
 ---
 
-**版本**: v2.0.0-alpha  
-**更新日期**: 2024-11-08  
+**版本**: v3.0.0（统一架构）  
+**更新日期**: 2024-11-09  
 **维护者**: fe-testgen-mcp team

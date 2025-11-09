@@ -29,22 +29,23 @@ Frontend Phabricator Diff Review and Unit Test Generation MCP Server
 - ✅ 支持 Monorepo (pnpm/yarn/npm workspaces, Lerna, Nx, Rush)
 - ✅ 自动检测测试框架
 
-### 架构 V2
+### 核心架构
 - 🧠 **ReAct Agent 引擎**：支持 Thought → Action → Observation 循环
 - 🛠️ **BaseTool 基类**：统一生命周期管理（beforeExecute, executeImpl, afterExecute, onError）
 - 📊 **Metrics 体系**：自动埋点，支持 Counter/Timer/Histogram/Gauge
-- 🗂️ **ToolRegistry**：集中管理所有工具，动态注册与检索
-- 🧱 **Pipeline DSL**：声明式工作流编排 (YAML 配置)
+- 🗂️ **ToolRegistry**：集中管理所有工具，支持惰性加载和动态注册
+- 🧱 **Pipeline DSL**：声明式工作流编排（支持并行执行、循环、分支）
 - 🧠 **Context & Memory**：短期上下文与长期记忆管理
 - 🔌 **CodeChangeSource**：统一 Phabricator / Git / Raw diff 接入
 - 💉 **AppContext**：轻量级依赖注入容器
 - 📤 **Metrics 导出**：支持 JSON / Prometheus / Custom 格式，预留远程上传接口
+- ⚡ **性能优化**：惰性加载、并行执行、LLM 批处理、分层缓存
 
 **文档**：
-- `V2_REFACTOR_COMPLETED.md` - V2 重构完成报告
-- `ARCHITECTURE_V2.md` - 详细架构设计
+- `MIGRATION_COMPLETED.md` - 架构迁移完成报告（v3.0.0）
 - `REFACTOR_SUMMARY.md` - 重构总结
-- `MIGRATION_GUIDE.md` - 迁移指南
+- `ARCHITECTURE_REDESIGN.md` - 架构设计文档
+- `WORKFLOW_EXAMPLES.md` - 工作流示例
 
 ## 安装
 

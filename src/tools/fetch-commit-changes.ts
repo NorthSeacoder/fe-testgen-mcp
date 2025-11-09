@@ -1,12 +1,12 @@
 /**
- * FetchCommitChangesToolV2 - 获取 Git commit 变更内容
+ * FetchCommitChangesTool - 获取 Git commit 变更内容
  */
 
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { BaseTool, ToolMetadata } from '../../core/base-tool.js';
-import { parseDiff, generateNumberedDiff } from '../../utils/diff-parser.js';
-import type { Diff } from '../../schemas/diff.js';
+import { BaseTool, ToolMetadata } from '../core/base-tool.js';
+import { parseDiff, generateNumberedDiff } from '../utils/diff-parser.js';
+import type { Diff } from '../schemas/diff.js';
 
 export interface FetchCommitChangesInput {
   commitHash: string;
@@ -23,7 +23,7 @@ export interface FetchCommitChangesOutput {
   };
 }
 
-export class FetchCommitChangesToolV2 extends BaseTool<FetchCommitChangesInput, FetchCommitChangesOutput> {
+export class FetchCommitChangesTool extends BaseTool<FetchCommitChangesInput, FetchCommitChangesOutput> {
   getMetadata(): ToolMetadata {
     return {
       name: 'fetch-commit-changes',
@@ -44,7 +44,7 @@ export class FetchCommitChangesToolV2 extends BaseTool<FetchCommitChangesInput, 
         required: ['commitHash'],
       },
       category: 'code-retrieval',
-      version: '2.0.0',
+      version: '3.0.0',
     };
   }
 

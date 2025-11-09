@@ -17,12 +17,16 @@ import { getMetrics } from '../utils/metrics.js';
 
 export interface PipelineStep {
   name: string;
-  type: 'tool' | 'agent' | 'condition' | 'parallel';
+  type: 'tool' | 'agent' | 'condition' | 'parallel' | 'loop' | 'branch';
   ref?: string; // 工具/Agent 名称
   input?: Record<string, unknown>;
   condition?: string; // 条件表达式
   onError?: 'stop' | 'continue' | 'retry';
   retries?: number;
+  steps?: PipelineStep[]; // 用于 parallel 和 branch 的子步骤
+  branches?: Array<{ condition: string; steps: PipelineStep[] }>; // 用于 branch
+  loopOver?: string; // 用于 loop，指向需要迭代的数组路径
+  loopItem?: string; // 用于 loop，当前项的变量名
 }
 
 export interface PipelineDefinition {
@@ -71,7 +75,7 @@ export class PipelineExecutor {
         }
 
         // 执行步骤
-        const stepResult = await this.executeStep(step, context);
+        const stepResult = await this.executeStepByType(step, context, step.name);
         context.steps[step.name] = stepResult;
 
         // 错误处理
@@ -117,30 +121,40 @@ export class PipelineExecutor {
     }
   }
 
-  private async executeStep(
+  private async executeStepByType(
     step: PipelineStep,
-    context: PipelineContext
+    context: PipelineContext,
+    stepKey: string
   ): Promise<{ data?: unknown; error?: string }> {
-    if (step.type === 'tool') {
-      return this.executeToolStep(step, context);
+    switch (step.type) {
+      case 'tool':
+        return this.executeToolStep(step, context, stepKey);
+      case 'parallel':
+        return this.executeParallelStep(step, context, stepKey);
+      case 'loop':
+        return this.executeLoopStep(step, context, stepKey);
+      case 'branch':
+        return this.executeBranchStep(step, context, stepKey);
+      default:
+        return { error: `Unsupported step type: ${step.type}` };
     }
-
-    // TODO: 支持其他类型（agent, condition, parallel）
-    return { error: `Unsupported step type: ${step.type}` };
   }
 
   private async executeToolStep(
     step: PipelineStep,
-    context: PipelineContext
+    context: PipelineContext,
+    stepKey: string
   ): Promise<{ data?: unknown; error?: string }> {
     if (!step.ref) {
       return { error: 'Tool step missing "ref"' };
     }
 
-    const tool = this.toolRegistry.get(step.ref);
+    const tool = await this.toolRegistry.get(step.ref);
     if (!tool) {
       return { error: `Tool "${step.ref}" not found` };
     }
+
+    logger.info(`[Pipeline] Calling tool ${step.ref} for step ${stepKey}`);
 
     // 解析输入（支持模板变量）
     const input = this.resolveInput(step.input || {}, context);
@@ -151,6 +165,120 @@ export class PipelineExecutor {
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  private async executeParallelStep(
+    step: PipelineStep,
+    context: PipelineContext,
+    stepKey: string
+  ): Promise<{ data?: unknown; error?: string }> {
+    if (!step.steps || step.steps.length === 0) {
+      return { error: 'Parallel step missing "steps"' };
+    }
+
+    logger.info(`[Pipeline] Executing ${step.steps.length} steps in parallel`);
+
+    try {
+      const results = await Promise.all(
+        step.steps.map(async (subStep, index) => {
+          const subStepKey = `${stepKey}.${subStep.name || index}`;
+          logger.info(`[Pipeline] Parallel substep: ${subStepKey}`);
+          return {
+            name: subStep.name || `${index}`,
+            result: await this.executeStepByType(subStep, context, subStepKey),
+          };
+        })
+      );
+
+      const parallelResults: Record<string, any> = {};
+      for (const { name, result } of results) {
+        parallelResults[name] = result.data;
+      }
+
+      return { data: parallelResults };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  private async executeLoopStep(
+    step: PipelineStep,
+    context: PipelineContext,
+    stepKey: string
+  ): Promise<{ data?: unknown; error?: string }> {
+    if (!step.loopOver || !step.steps || step.steps.length === 0) {
+      return { error: 'Loop step missing "loopOver" or "steps"' };
+    }
+
+    const arrayValue = this.getValueByPath(step.loopOver, context);
+    if (!Array.isArray(arrayValue)) {
+      return { error: `Loop path "${step.loopOver}" does not point to an array` };
+    }
+
+    logger.info(`[Pipeline] Looping over ${arrayValue.length} items`);
+
+    const loopResults: any[] = [];
+
+    for (let i = 0; i < arrayValue.length; i++) {
+      const item = arrayValue[i];
+      const loopContext: PipelineContext = {
+        ...context,
+        input: {
+          ...context.input,
+          [step.loopItem || 'item']: item,
+          index: i,
+        },
+      };
+
+      logger.info(`[Pipeline] Loop iteration ${i}`);
+
+      for (const subStep of step.steps) {
+        const subStepKey = `${stepKey}.${i}.${subStep.name}`;
+        const result = await this.executeStepByType(subStep, loopContext, subStepKey);
+        loopContext.steps[subStep.name] = result;
+      }
+
+      loopResults.push({
+        index: i,
+        item,
+        steps: loopContext.steps,
+      });
+    }
+
+    return { data: loopResults };
+  }
+
+  private async executeBranchStep(
+    step: PipelineStep,
+    context: PipelineContext,
+    stepKey: string
+  ): Promise<{ data?: unknown; error?: string }> {
+    if (!step.branches || step.branches.length === 0) {
+      return { error: 'Branch step missing "branches"' };
+    }
+
+    logger.info(`[Pipeline] Evaluating ${step.branches.length} branch conditions`);
+
+    for (const branch of step.branches) {
+      if (this.evaluateCondition(branch.condition, context)) {
+        logger.info(`[Pipeline] Branch condition met: ${branch.condition}`);
+
+        for (const subStep of branch.steps) {
+          const subStepKey = `${stepKey}.${subStep.name}`;
+          const result = await this.executeStepByType(subStep, context, subStepKey);
+          context.steps[subStep.name] = result;
+
+          if (result.error && subStep.onError === 'stop') {
+            return { error: result.error };
+          }
+        }
+
+        return { data: 'branch_executed' };
+      }
+    }
+
+    logger.info(`[Pipeline] No branch condition matched`);
+    return { data: 'no_branch_matched' };
   }
 
   /**
