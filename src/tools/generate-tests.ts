@@ -143,7 +143,7 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
     const source = new RawDiffSource(revisionId, diff, {
       source: 'phabricator',
       identifier: revisionId,
-      title: diff.metadata?.title,
+      title: diff.title,
     });
 
     // 3. 创建 TestAgent

@@ -14,7 +14,6 @@ import { OpenAIClient } from '../clients/openai.js';
 import { EmbeddingClient } from '../clients/embedding.js';
 import { StateManager } from '../state/manager.js';
 import { ContextStore } from '../core/context.js';
-import { PhabricatorClient } from '../clients/phabricator.js';
 import { logger } from '../utils/logger.js';
 import type { Issue } from '../schemas/issue.js';
 
@@ -44,8 +43,7 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
   constructor(
     private openai: OpenAIClient,
     private embedding: EmbeddingClient,
-    private phabricator: PhabricatorClient,
-    private state: StateManager,
+    private stateManager: StateManager,
     private contextStore: ContextStore,
     private fetchDiffTool: FetchDiffTool
   ) {
@@ -140,7 +138,7 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
       logger.info(`[ReviewFrontendDiffTool] No frontend files in ${revisionId}`);
       return {
         revisionId,
-        topics: [],
+        dimensions: [],
         issues: [],
         publishedToPhab: false,
         summary: {
@@ -155,8 +153,7 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
     const reviewAgent = new ReviewAgent(
       this.openai,
       this.embedding,
-      this.phabricator,
-      this.state,
+      this.stateManager,
       this.contextStore
     );
 
@@ -187,7 +184,7 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
     const result = await reviewAgent.review(diff, config);
 
     if (!result.success) {
-      throw new Error(`Review failed: ${result.error || 'Unknown error'}`);
+      throw new Error(`Review failed`);
     }
 
     // 4. 生成统计摘要

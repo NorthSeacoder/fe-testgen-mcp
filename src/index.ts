@@ -20,6 +20,11 @@ import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { ReviewFrontendDiffTool } from './tools/review-frontend-diff.js';
 import { AnalyzeTestMatrixTool } from './tools/analyze-test-matrix.js';
 import { GenerateTestsTool } from './tools/generate-tests.js';
+import { PublishPhabricatorCommentsTool } from './tools/publish-phabricator-comments.js';
+import { WriteTestFileTool } from './tools/write-test-file.js';
+import { RunTestsTool } from './tools/run-tests.js';
+import { AnalyzeRawDiffTestMatrixTool } from './tools/analyze-raw-diff-test-matrix.js';
+import { GenerateTestsFromRawDiffTool } from './tools/generate-tests-from-raw-diff.js';
 import { getEnv, validateAiConfig } from './config/env.js';
 import { loadConfig } from './config/loader.js';
 import { logger } from './utils/logger.js';
@@ -114,17 +119,21 @@ function initialize() {
 
   // 2. Agent 封装工具
   toolRegistry.register(
-    new ReviewFrontendDiffTool(openai, embedding, phabricator, state, contextStore, fetchDiffTool)
+    new ReviewFrontendDiffTool(openai, embedding, state, contextStore, fetchDiffTool)
   );
   toolRegistry.register(new AnalyzeTestMatrixTool(openai, state, fetchDiffTool));
   toolRegistry.register(
     new GenerateTestsTool(openai, embedding, state, contextStore, fetchDiffTool)
   );
+
+  toolRegistry.register(new PublishPhabricatorCommentsTool(phabricator));
+  toolRegistry.register(new WriteTestFileTool());
+  toolRegistry.register(new RunTestsTool());
+  toolRegistry.register(new AnalyzeRawDiffTestMatrixTool(openai, state));
+  toolRegistry.register(new GenerateTestsFromRawDiffTool(openai, embedding, state, contextStore));
   
   // TODO: 其他辅助工具待实现:
-  // - publish-phabricator-comments: 发布评论到 Phabricator
-  // - write-test-file: 写入测试文件到磁盘
-  // - run-tests: 执行测试命令
+  // - 更多 n8n 集成工具
 
   // 初始化缓存预热（异步执行，不阻塞启动）
   const warmer = initializeCacheWarmer({

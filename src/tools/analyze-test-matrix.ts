@@ -43,8 +43,8 @@ export class AnalyzeTestMatrixTool extends BaseTool<AnalyzeTestMatrixInput, Anal
   private baseAnalyzer: BaseAnalyzeTestMatrix;
 
   constructor(
-    private openai: OpenAIClient,
-    private state: StateManager,
+    openai: OpenAIClient,
+    state: StateManager,
     private fetchDiffTool: FetchDiffTool
   ) {
     super();

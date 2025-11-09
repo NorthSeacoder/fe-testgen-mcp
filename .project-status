@@ -86,11 +86,11 @@
 - ✅ **review-frontend-diff** - 封装 ReviewAgent 的多维度代码审查工具
 - ✅ **analyze-test-matrix** - 封装 TestMatrixAnalyzer 的测试矩阵分析工具  
 - ✅ **generate-tests** - 封装 TestAgent 的测试生成工具
-- 🚧 **publish-phabricator-comments** - 需要实现
-- 🚧 **write-test-file** - 需要实现
-- 🚧 **run-tests** - 需要实现
-- 🚧 **analyze-raw-diff-test-matrix** - 需要实现（n8n 集成）
-- 🚧 **generate-tests-from-raw-diff** - 需要实现（n8n 集成）
+- ✅ **publish-phabricator-comments** - 发布评论到 Phabricator
+- ✅ **write-test-file** - 将测试代码写入磁盘
+- ✅ **run-tests** - 执行测试命令
+- ✅ **analyze-raw-diff-test-matrix** - n8n/GitLab 集成的测试矩阵分析工具
+- ✅ **generate-tests-from-raw-diff** - n8n/GitLab 集成的端到端测试生成工具
 
 **注意**: 核心 Agent 系统已完整实现并封装为 MCP 工具，可以通过 MCP 协议直接调用。
 
@@ -114,8 +114,8 @@
 ## 📊 项目指标
 
 ### 代码规模
-- TypeScript 文件: ~63+
-- 工具数量: 5 (MCP Tools), 11 (专业 Agents)
+- TypeScript 文件: ~68+
+- 工具数量: 10 (MCP Tools), 11 (专业 Agents)
 - Agent 数量: 12 (2 主 Agent + 10 专业 Agent)
 
 ### 依赖数量
@@ -128,13 +128,13 @@
 - [x] 将 ReviewAgent 封装为 review-frontend-diff Tool
 - [x] 将 TestMatrixAnalyzer 封装为 analyze-test-matrix Tool
 - [x] 将 TestAgent 封装为 generate-tests Tool
-- [ ] 实现 publish-phabricator-comments Tool
-- [ ] 实现 write-test-file Tool
+- [x] 实现 publish-phabricator-comments Tool
+- [x] 实现 write-test-file Tool
+- [x] 实现 run-tests Tool
+- [x] 实现 n8n/GitLab raw diff 集成工具
 - [ ] 增加核心模块单元测试
 
 ### 中优先级（P1）
-- [ ] 实现 run-tests Tool
-- [ ] 实现 n8n/GitLab 集成工具
 - [ ] 增加 Agent 单元测试
 - [ ] 监控数据可视化面板
 - [ ] 更多测试场景支持

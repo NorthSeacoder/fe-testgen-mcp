@@ -30,6 +30,7 @@ export const Diff = z.object({
   files: z.array(DiffFile),
   raw: z.string(), // 原始 diff 文本
   numberedRaw: z.string().optional(), // 带行号的 diff 文本
+  metadata: z.record(z.unknown()).optional(), // 额外的元数据
 });
 export type Diff = z.infer<typeof Diff>;
 

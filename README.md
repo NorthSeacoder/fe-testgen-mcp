@@ -321,9 +321,9 @@ tracking:
 
 ### 可用工具
 
-本 MCP Server 当前提供 **5 个核心工具**，完整的 Agent 系统已实现并封装为 MCP 工具。
+本 MCP Server 当前提供 **10 个核心工具**，完整的 Agent 系统已实现并封装为 MCP 工具。
 
-> ✅ **开发状态**: 核心 Agent 系统（ReviewAgent、TestAgent、TestMatrixAnalyzer）已完整实现并封装为 MCP 工具，包括并发控制、响应缓存等优化。详见 [.project-status](./.project-status) 了解当前进度。
+> ✅ **开发状态**: 核心 Agent 系统和辅助工具已完整实现并封装为 MCP 工具，包括并发控制、响应缓存、n8n 集成等优化。详见 [.project-status](./.project-status) 了解当前进度。
 
 > ✅ **已实现核心功能**:
 > - **AgentCoordinator**: 多 Agent 协作框架，支持并行执行、优先级调度、自动重试
@@ -337,7 +337,12 @@ tracking:
 > - ✅ **review-frontend-diff** - 封装 ReviewAgent 的多维度代码审查工具
 > - ✅ **analyze-test-matrix** - 封装 TestMatrixAnalyzer 的测试矩阵分析工具
 > - ✅ **generate-tests** - 封装 TestAgent 的测试生成工具
-> - 🚧 **其他工具** - 待实现（publish-comments, write-file, run-tests 等）
+> - ✅ **publish-phabricator-comments** - 发布审查评论到 Phabricator
+> - ✅ **write-test-file** - 将生成的测试代码写入磁盘
+> - ✅ **run-tests** - 执行测试命令并解析结果
+> - ✅ **analyze-raw-diff-test-matrix** - n8n/GitLab 集成的测试矩阵分析工具
+> - ✅ **generate-tests-from-raw-diff** - n8n/GitLab 集成的端到端测试生成工具
+> - 🚧 **其他工具** - 待实现（更多 n8n 集成、测试增强等）
 
 #### 1. fetch-diff
 
@@ -523,68 +528,111 @@ tracking:
 
 #### 6. publish-phabricator-comments
 
-**功能：** 手动发布评论到 Phabricator（通常由 `review-frontend-diff` 自动调用）。
+**功能：** 将代码审查问题发布为 Phabricator inline comments。
 
 **参数：**
 ```typescript
 {
   revisionId: string       // Revision ID
-  comments: Array<{
-    file: string           // 文件路径
-    line: number           // 行号
-    message: string        // 评论内容
-    issueId: string        // 问题 ID（用于去重）
-  }>
-  message?: string         // 总体评论（可选）
-  incremental?: boolean    // 增量模式，启用去重（默认 true）
+  issues: Issue[]          // 代码审查问题列表
+  message?: string         // 主评论内容（可选，默认自动生成）
+  dryRun?: boolean         // 预览模式，不实际发布（默认 false）
 }
 ```
 
 **返回：**
-- 发布成功的评论数量
-- 跳过的评论数量（已存在）
-- 详细结果列表
+- published: 发布的评论数量
+- skipped: 跳过的评论数量（已存在）
+- failed: 失败的评论数量
+- summary: 统计信息（按严重程度和维度）
 
 **特性：**
-- ✅ 增量去重，避免重复发布
-- ✅ 智能合并同行评论
+- ✅ 自动去重已存在的评论
 - ✅ 支持批量发布
+- ✅ 支持预览模式（dryRun）
+- ✅ 自动生成汇总评论
+
+**注意：**
+- 需要设置 `ALLOW_PUBLISH_COMMENTS=true` 才能实际发布
+- 默认为预览模式，设置 `dryRun=false` 才会实际发布
 
 **使用场景：**
+- 将 `review-frontend-diff` 生成的问题发布到 Phabricator
 - 手动发布自定义评论
-- 重新发布之前生成的评论
-- 调试评论发布问题
+- 预览评论后再决定是否发布
 
 ---
 
 #### 7. write-test-file
 
-**功能：** 将生成的测试用例写入磁盘文件。
+**功能：** 将生成的测试代码写入文件到磁盘。
 
 **参数：**
 ```typescript
 {
-  files: Array<{
-    filePath: string;   // 测试文件的绝对路径
-    content: string;    // 要写入的测试代码
-    overwrite?: boolean // 是否覆盖已存在的文件（默认 false）
-  }>
+  tests: TestCase[]        // 测试用例列表
+  projectRoot?: string     // 项目根目录（必需）
+  dryRun?: boolean         // 预览模式，不实际写入（默认 false）
+  overwrite?: boolean      // 是否覆盖已存在的文件（默认 false）
 }
 ```
 
 **返回：**
-- success: 写入成功的文件数量
-- total: 处理的文件总数
-- results: 每个文件的写入结果（success/error）
+- filesWritten: 写入成功的文件列表
+- filesSkipped: 跳过的文件列表（已存在）
+- filesFailed: 写入失败的文件列表
+- summary: 统计信息
+
+**特性：**
+- ✅ 自动创建目录结构
+- ✅ 支持预览模式（dryRun）
+- ✅ 防止覆盖已存在文件（可配置）
+- ✅ 按测试文件分组写入
 
 **使用场景：**
 - 将 `generate-tests` 生成的测试代码落盘
 - 批量创建多个测试文件
-- 控制是否覆盖已有文件（默认不覆盖，避免误删）
+- 预览测试文件后再决定是否写入
 
 ---
 
-#### 8. analyze-commit-test-matrix
+#### 8. run-tests
+
+**功能：** 执行测试命令并返回结果。
+
+**参数：**
+```typescript
+{
+  testFiles?: string[]     // 要运行的测试文件（可选）
+  projectRoot?: string     // 项目根目录（默认当前目录）
+  framework?: 'vitest' | 'jest'  // 测试框架（可选，自动检测）
+  watch?: boolean          // 监听模式（默认 false）
+  coverage?: boolean       // 生成覆盖率报告（默认 false）
+  timeout?: number         // 超时时间（毫秒，默认 30000）
+}
+```
+
+**返回：**
+- success: 测试是否通过
+- framework: 使用的测试框架
+- summary: 测试结果统计（总数、通过、失败、跳过、耗时）
+- stdout: 标准输出
+- stderr: 标准错误输出
+
+**特性：**
+- ✅ 支持 Vitest 和 Jest
+- ✅ 可指定测试文件或运行全部
+- ✅ 解析测试结果统计
+- ✅ 支持覆盖率报告
+
+**使用场景：**
+- 生成测试后自动执行验证
+- CI/CD 流程中执行测试套件
+- 验证代码质量门控
+
+---
+
+#### 9. analyze-commit-test-matrix
 
 **功能：** 分析 commit 的功能清单和测试矩阵。
 
