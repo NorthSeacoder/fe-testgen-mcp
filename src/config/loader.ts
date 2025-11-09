@@ -63,17 +63,23 @@ export function loadConfig(configPath?: string): Config {
     resolved.projectRoot = env.PROJECT_ROOT;
   }
 
-  // 监控配置使用环境变量填充
+  // 监控配置使用环境变量填充（完全可选，默认不启用）
   const trackingEnvVar = env.TRACKING_ENV as 'dev' | 'test' | 'prod' | undefined;
-  if (env.TRACKING_ENABLED || env.TRACKING_APP_ID || env.TRACKING_ENV || env.TRACKING_MEASUREMENT || env.TRACKING_METRICS_TYPE) {
+  if (env.TRACKING_ENABLED === 'true') {
+    // 只有当 TRACKING_ENABLED=true 时才启用监控
     resolved.tracking = {
-      enabled: env.TRACKING_ENABLED ? env.TRACKING_ENABLED === 'true' : undefined,
-      appId: env.TRACKING_APP_ID,
+      enabled: true,
+      appId: env.TRACKING_APP_ID || 'MCP_SERVICE',
       appVersion: env.TRACKING_APP_VERSION,
-      env: trackingEnvVar,
-      measurement: env.TRACKING_MEASUREMENT,
-      metricsType: env.TRACKING_METRICS_TYPE,
+      env: trackingEnvVar || 'prod',
+      measurement: env.TRACKING_MEASUREMENT || 'mcp_service_metrics',
+      metricsType: env.TRACKING_METRICS_TYPE || 'metricsType1',
       ...(resolved.tracking as Record<string, unknown> | undefined),
+    } as Record<string, unknown>;
+  } else if (!resolved.tracking) {
+    // 如果没有配置文件中的 tracking 配置，也没有启用环境变量，则禁用
+    resolved.tracking = {
+      enabled: false,
     } as Record<string, unknown>;
   }
 

@@ -47,7 +47,7 @@ export const configSchema = z.object({
   projectRoot: z.string().optional(),
   // 监控数据上报配置（可选）
   tracking: z.object({
-    enabled: z.boolean().default(true),
+    enabled: z.boolean().default(false),
     appId: z.string().default('MCP_SERVICE'),
     appVersion: z.string().optional(),
     env: z.enum(['dev', 'test', 'prod']).default('prod'),
