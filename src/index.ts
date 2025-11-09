@@ -1,11 +1,9 @@
 /**
  * fe-testgen-mcp - Frontend Test Generation MCP Server
- * 基于 MCP 协议的前端代码审查和单元测试生成工具
+ * 基于 MCP 协议（FastMCP 实现）的前端代码审查和单元测试生成工具
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { FastMCP } from 'fastmcp';
 import dotenv from 'dotenv';
 
 import { ToolRegistry } from './core/tool-registry.js';
@@ -22,8 +20,6 @@ import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { getEnv, validateAiConfig } from './config/env.js';
 import { loadConfig } from './config/loader.js';
 import { logger } from './utils/logger.js';
-import { HttpTransport } from './transports/http.js';
-import { initializePrometheusExporter } from './utils/prometheus-exporter.js';
 import { initializeCacheWarmer } from './cache/warmer.js';
 import { MCPTrackingService } from './utils/tracking-service.js';
 
@@ -31,13 +27,12 @@ dotenv.config();
 
 let toolRegistry: ToolRegistry;
 let memory: Memory;
-let httpTransport: HttpTransport | null = null;
 let trackingService: MCPTrackingService | undefined;
 
 function initialize() {
   const config = loadConfig();
   getEnv();
-  
+
   const validation = validateAiConfig({
     llm: {
       apiKey: config.llm.apiKey,
@@ -52,7 +47,7 @@ function initialize() {
   });
 
   if (validation.errors.length > 0) {
-    throw new Error(`配置验证失败:\n${validation.errors.map(e => `  - ${e}`).join('\n')}`);
+    throw new Error(`配置验证失败:\n${validation.errors.map((e) => `  - ${e}`).join('\n')}`);
   }
 
   // 初始化监控服务
@@ -110,12 +105,6 @@ function initialize() {
   toolRegistry.register(new FetchDiffTool(phabricator, cache));
   toolRegistry.register(new FetchCommitChangesTool());
 
-  // 初始化 Prometheus Exporter
-  initializePrometheusExporter({
-    prefix: 'fe_testgen_mcp_',
-    defaultLabels: { service: 'fe-testgen-mcp', version: '3.0.0' },
-  });
-
   // 初始化缓存预热（异步执行，不阻塞启动）
   const warmer = initializeCacheWarmer({
     enabled: true,
@@ -128,7 +117,7 @@ function initialize() {
   });
 
   getMetrics().recordCounter('server.initialization.success', 1);
-  logger.info('Initialization complete', { 
+  logger.info('Initialization complete', {
     tools: toolRegistry.listMetadata().length,
     embeddingEnabled: config.embedding.enabled,
     trackingEnabled: !!trackingService,
@@ -141,88 +130,101 @@ function initialize() {
       embeddingEnabled: config.embedding.enabled,
     });
   }
+
+  return { toolRegistry, trackingService };
 }
-
-const server = new Server(
-  { name: 'fe-testgen-mcp', version: '3.0.0' },
-  { capabilities: { tools: {} } }
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: toolRegistry.listMetadata().map(meta => ({
-    name: meta.name,
-    description: meta.description,
-    inputSchema: meta.inputSchema,
-  })),
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async request => {
-  const { name, arguments: args } = request.params;
-  logger.info('Tool called', { tool: name });
-  getMetrics().recordCounter('tool.called', 1, { tool: name });
-
-  const startedAt = Date.now();
-
-  try {
-    const tool = await toolRegistry.get(name);
-    if (!tool) {
-      getMetrics().recordCounter('tool.not_found', 1, { tool: name });
-      if (trackingService) {
-        void trackingService.trackToolCall(name, Date.now() - startedAt, 'error', 'Tool not found');
-      }
-      throw new Error(`Tool "${name}" not found`);
-    }
-
-    const result = await tool.execute(args || {});
-    const duration = Date.now() - startedAt;
-
-    if (trackingService) {
-      void trackingService.trackToolCall(name, duration, 'success');
-    }
-
-    return tool.formatResponse(result);
-  } catch (error) {
-    const duration = Date.now() - startedAt;
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (trackingService) {
-      void trackingService.trackToolCall(name, duration, 'error', errorMessage);
-    }
-
-    throw error;
-  }
-});
 
 async function main() {
   try {
-    initialize();
+    const { toolRegistry, trackingService } = initialize();
 
-    // 检查是否使用 HTTP transport
-    const useHttp = process.argv.includes('--transport=http') || process.env.TRANSPORT_MODE === 'http';
+    const server = new FastMCP({
+      name: 'fe-testgen-mcp',
+      version: '3.0.0',
+    });
+
+    // 动态注册所有工具
+    const tools = await toolRegistry.listAll();
+    for (const tool of tools) {
+      const metadata = tool.getMetadata();
+
+      server.addTool({
+        name: metadata.name,
+        description: metadata.description,
+        parameters: metadata.inputSchema as any,
+        execute: async (args: any) => {
+          logger.info('Tool called', { tool: metadata.name });
+          getMetrics().recordCounter('tool.called', 1, { tool: metadata.name });
+
+          const startTime = Date.now();
+          try {
+            const result = await tool.execute(args || {});
+            const duration = Date.now() - startTime;
+
+            // 上报工具调用成功
+            if (trackingService) {
+              void trackingService.trackToolCall(metadata.name, duration, 'success');
+            }
+
+            // FastMCP expects string or content format
+            const response = tool.formatResponse(result);
+            if (response.content && response.content.length > 0) {
+              const textParts = response.content.map((item) => {
+                if (item.type === 'text') {
+                  return item.text;
+                }
+                return JSON.stringify(item);
+              });
+              return textParts.join('\n');
+            }
+            return JSON.stringify(result);
+          } catch (error) {
+            const duration = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // 上报工具调用失败
+            if (trackingService) {
+              void trackingService.trackToolCall(metadata.name, duration, 'error', errorMessage);
+            }
+
+            throw error;
+          }
+        },
+      });
+    }
+
+    // 检查传输模式
+    const useHttpStream =
+      process.argv.includes('--transport=httpStream') ||
+      process.argv.includes('--transport=http-stream') ||
+      process.env.TRANSPORT_MODE === 'httpStream' ||
+      process.env.TRANSPORT_MODE === 'http-stream';
     const httpPort = parseInt(process.env.HTTP_PORT || '3000', 10);
 
-    if (useHttp) {
-      // HTTP Transport 模式
-      httpTransport = new HttpTransport(toolRegistry, {
-        port: httpPort,
-        host: '0.0.0.0',
-        cors: { origin: '*' },
+    if (useHttpStream) {
+      // FastMCP HTTP Streaming 模式
+      server.start({
+        transportType: 'httpStream',
+        httpStream: {
+          port: httpPort,
+          endpoint: '/mcp',
+        },
       });
-      await httpTransport.start();
-      logger.info('HTTP transport started', { port: httpPort });
-      getMetrics().recordCounter('server.started', 1, { transport: 'http' });
+      logger.info('FastMCP HTTP streaming started', { port: httpPort });
+      getMetrics().recordCounter('server.started', 1, { transport: 'httpStream' });
 
       if (trackingService) {
         void trackingService.trackServerEvent('started', {
-          transport: 'http',
+          transport: 'httpStream',
           port: httpPort,
         });
       }
     } else {
-      // 默认 Stdio Transport 模式
-      const transport = new StdioServerTransport();
-      await server.connect(transport);
-      logger.info('MCP server started', { transport: 'stdio' });
+      // 默认 Stdio 模式
+      server.start({
+        transportType: 'stdio',
+      });
+      logger.info('FastMCP server started', { transport: 'stdio' });
       getMetrics().recordCounter('server.started', 1, { transport: 'stdio' });
 
       if (trackingService) {
@@ -255,14 +257,10 @@ process.on('SIGINT', async () => {
     void trackingService.trackServerEvent('shutdown');
   }
 
-  if (httpTransport) {
-    await httpTransport.stop();
-  }
-
   process.exit(0);
 });
 
-main().catch(error => {
+main().catch((error) => {
   logger.error('Fatal error', { error });
 
   if (trackingService) {

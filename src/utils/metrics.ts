@@ -3,7 +3,7 @@
  *
  * Goals:
  *  - Provide a consistent interface without forcing a concrete backend
- *  - Enable future integration with Prometheus / Datadog, etc.
+ *  - Enable integration with remote tracking services
  *  - Offer a zero-dependency in-memory implementation by default
  */
 

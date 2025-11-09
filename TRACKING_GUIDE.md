@@ -206,24 +206,21 @@ if (tracking) {
 }
 ```
 
-## FastMCP 集成
+## 风格化运行方式
 
-本项目同时提供了基于 `fastmcp` 库的实现，支持 HTTP Streaming（SSE）传输模式。
-
-### 使用 FastMCP 版本
+项目基于 `fastmcp` 实现，既支持 stdio，也支持 HTTP Streaming（含 SSE）。
 
 ```bash
-# 启动 FastMCP 版本（stdio模式）
-npm run start:fastmcp
+# Stdio 模式（默认）
+npm start
 
-# 启动 FastMCP 版本（HTTP Streaming模式）
-npm run start:fastmcp -- --transport=httpStream
-
-# 或使用环境变量
-TRANSPORT_MODE=httpStream HTTP_PORT=3000 npm run start:fastmcp
+# HTTP Streaming 模式
+npm start -- --transport=httpStream
+# 或通过环境变量
+TRANSPORT_MODE=httpStream HTTP_PORT=3000 npm start
 ```
 
-### FastMCP HTTP Streaming 端点
+### HTTP Streaming 端点
 
 - `POST http://localhost:3000/mcp` - MCP 主端点（HTTP Streaming）
 - `GET http://localhost:3000/sse` - SSE 端点（自动可用）
@@ -231,39 +228,9 @@ TRANSPORT_MODE=httpStream HTTP_PORT=3000 npm run start:fastmcp
 ### FastMCP 特性
 
 - ✅ 自动处理工具注册
-- ✅ 内置 HTTP Streaming 支持
-- ✅ SSE 兼容性
-- ✅ 简化的API设计
+- ✅ 内置 HTTP Streaming / SSE 支持
+- ✅ 简化的 API 设计
 - ✅ 完整的监控数据上报支持
-
-## 版本对比
-
-### 标准版本 (index.ts)
-
-```bash
-npm start
-```
-
-- 使用 `@modelcontextprotocol/sdk`
-- 支持 stdio 和 HTTP 传输
-- 自定义 HTTP Transport 实现
-- Prometheus metrics 导出
-
-### FastMCP 版本 (index-fastmcp.ts)
-
-```bash
-npm run start:fastmcp
-```
-
-- 使用 `fastmcp` 库
-- 支持 stdio 和 httpStream 传输
-- 内置 SSE 支持
-- 简化的工具注册流程
-- 相同的监控数据上报功能
-
-两个版本功能相同，可根据需求选择：
-- **标准版本**：适合需要精细控制传输层的场景
-- **FastMCP版本**：适合快速开发和简化部署的场景
 
 ## 开发环境
 
@@ -293,6 +260,5 @@ npm run start:fastmcp
 
 - 实现代码：`src/utils/tracking-service.ts`
 - Metrics 集成：`src/utils/metrics.ts`
-- HTTP Transport：`src/transports/http.ts`
-- FastMCP 实现：`src/index-fastmcp.ts`
+- FastMCP 入口：`src/index.ts`
 - 接口文档：`监控数据上报接口说明.md`

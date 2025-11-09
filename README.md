@@ -39,7 +39,7 @@ Frontend Phabricator Diff Review and Unit Test Generation MCP Server
 - 🧠 **Context & Memory**：短期上下文与长期记忆管理
 - 🔌 **CodeChangeSource**：统一 Phabricator / Git / Raw diff 接入
 - 💉 **AppContext**：轻量级依赖注入容器
-- 📤 **Metrics 导出**：支持 JSON / Prometheus / Custom 格式，预留远程上传接口
+- 📤 **监控数据上报**：自动上报工具调用、服务器事件、错误等到远程监控服务
 - ⚡ **性能优化**：惰性加载、并行执行、LLM 批处理、分层缓存
 
 ## 安装
@@ -219,77 +219,36 @@ EOF
 
 ### 运行模式
 
-本项目提供两种实现版本：
+本项目基于 `fastmcp` 库实现，提供简化的 API 和内置 HTTP Streaming 支持。
 
-#### 标准版本（推荐）
-
-使用 `@modelcontextprotocol/sdk` 实现，支持精细控制。
-
-##### 1. Stdio（默认）
+#### Stdio 模式（默认）
 
 ```bash
 npm start
 ```
 
 - 通过 stdio 与客户端通信
-- 兼容所有支持 MCP 协议的客户端（如 Cursor）
+- 兼容所有支持 MCP 协议的客户端（如 Cursor、Claude Desktop）
 
-##### 2. HTTP API
+#### HTTP Streaming 模式
 
 ```bash
 # 方法 1：命令行参数
-npm start -- --transport=http
+npm start -- --transport=httpStream
 
 # 方法 2：环境变量
-TRANSPORT_MODE=http HTTP_PORT=3000 npm start
+TRANSPORT_MODE=httpStream HTTP_PORT=3000 npm start
 ```
 
-**默认端点**：
-- `GET  /api/tools` - 列出可用工具
-- `POST /api/tools/call` - 调用工具（JSON 请求）
-- `GET  /api/metrics` - Prometheus 指标
-- `GET  /api/health` - 健康检查
-
-> 详细用法请参阅 [HTTP_TRANSPORT_GUIDE.md](./HTTP_TRANSPORT_GUIDE.md)
-
-#### FastMCP 版本（实验性）
-
-使用 `fastmcp` 库实现，提供简化的 API 和内置 HTTP Streaming 支持。
-
-```bash
-# Stdio 模式
-npm run start:fastmcp
-
-# HTTP Streaming 模式（支持 SSE）
-npm run start:fastmcp -- --transport=httpStream
-
-# 或使用环境变量
-TRANSPORT_MODE=httpStream HTTP_PORT=3000 npm run start:fastmcp
-```
-
-**FastMCP 端点**：
+**端点说明**：
 - `POST http://localhost:3000/mcp` - MCP 主端点（HTTP Streaming）
 - `GET http://localhost:3000/sse` - SSE 端点（自动可用）
 
 **FastMCP 特性**：
 - ✅ 内置 HTTP Streaming / SSE 支持
-- ✅ 简化的工具注册流程
-- ✅ 自动处理连接管理
-- ✅ 相同的监控数据上报功能
-
-#### Prometheus Metrics
-
-HTTP 模式自动暴露 `/api/metrics` 端点，支持 Prometheus 抓取：
-
-```yaml
-scrape_configs:
-  - job_name: 'fe-testgen-mcp'
-    static_configs:
-      - targets: ['localhost:3000']
-    metrics_path: '/api/metrics'
-```
-
-Prometheus 指标前缀默认为 `fe_testgen_mcp_`，并自动附带 `service`、`version` 标签。
+- ✅ 自动工具注册和连接管理
+- ✅ 简化的 API 设计
+- ✅ 完整的监控数据上报功能
 
 #### 监控数据上报
 
