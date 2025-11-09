@@ -18,6 +18,7 @@ export interface ReActConfig {
   maxSteps: number;
   temperature: number;
   stopReasons: string[];
+  useFunctionCalling?: boolean; // 是否使用 Function Calling（默认 true）
 }
 
 export interface ReActResult {
