@@ -1,39 +1,20 @@
 pipelines:
-  review:
-    description: "默认前端代码审查流程"
+  fetch-diff-basic:
+    description: "获取 Phabricator diff 的基础流程"
     steps:
-      - name: fetchDiff
+      - name: fetch
         type: tool
         ref: fetch-diff
         input:
           revisionId: "{{context.revisionId}}"
-      - name: review
-        type: tool
-        ref: review-frontend-diff
-        input:
-          revisionId: "{{context.revisionId}}"
-          mode: "{{context.reviewMode || 'full'}}"
-          publish: "{{context.publish || false}}"
-  test-generation:
-    description: "默认单元测试生成流程"
+          forceRefresh: "{{context.forceRefresh || false}}"
+
+  fetch-commit-basic:
+    description: "获取 Git 提交变更的基础流程"
     steps:
-      - name: analyze
+      - name: fetchCommit
         type: tool
-        ref: analyze-test-matrix
+        ref: fetch-commit-changes
         input:
-          revisionId: "{{context.revisionId}}"
-          projectRoot: "{{context.projectRoot}}"
-      - name: generate
-        type: tool
-        ref: generate-tests
-        input:
-          revisionId: "{{context.revisionId}}"
-          projectRoot: "{{context.projectRoot}}"
-          mode: "{{context.mode || 'incremental'}}"
-      - name: write
-        type: tool
-        ref: write-test-file
-        input:
-          projectRoot: "{{context.projectRoot}}"
-          filePath: "{{context.outputFilePath}}"
-          content: "{{steps.generate.data.generatedTests || ''}}"
+          commitHash: "{{context.commitHash}}"
+          repoPath: "{{context.repoPath || context.projectRoot || '.'}}"
