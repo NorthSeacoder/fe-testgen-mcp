@@ -8,6 +8,9 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   minify: false,
-  target: 'es2022',
+  target: 'node18',
+  platform: 'node',
+  // 确保 Node.js 内置模块正确处理
+  noExternal: [],
 });
 

@@ -91,10 +91,13 @@ if (enableConsoleLog) {
   );
 }
 
+// 如果没有配置任何 transport，使用 silent logger 避免警告
+// 在 stdio 模式下（MCP 通信），日志会干扰通信，所以默认保持静默
 export const logger = createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: logFormat,
   transports: logTransports,
+  silent: logTransports.length === 0, // 没有 transport 时静默
   exitOnError: false,
 });
 
