@@ -88,7 +88,7 @@ export class GenerateTestsFromRawDiffTool extends BaseTool<
     return {
       name: 'generate-tests-from-raw-diff',
       description:
-        '从外部 raw diff 一次性完成分析 + 测试生成（端到端工具）。\n\n' +
+        '从外部 raw diff 一次性完成分析 + 单元测试生成（一体化工具）。\n\n' +
         '💡 特性：\n' +
         '• 接受标准 unified diff 格式\n' +
         '• 自动（可选）分析测试矩阵\n' +
