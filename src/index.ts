@@ -22,11 +22,15 @@ import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { getEnv, validateAiConfig } from './config/env.js';
 import { loadConfig } from './config/loader.js';
 import { logger } from './utils/logger.js';
+import { HttpTransport } from './transports/http.js';
+import { initializePrometheusExporter } from './utils/prometheus-exporter.js';
+import { initializeCacheWarmer } from './cache/warmer.js';
 
 dotenv.config();
 
 let toolRegistry: ToolRegistry;
 let memory: Memory;
+let httpTransport: HttpTransport | null = null;
 
 function initialize() {
   const config = loadConfig();
@@ -92,6 +96,23 @@ function initialize() {
   toolRegistry.register(new FetchDiffTool(phabricator, cache));
   toolRegistry.register(new FetchCommitChangesTool());
 
+  // 初始化 Prometheus Exporter
+  initializePrometheusExporter({
+    prefix: 'fe_testgen_mcp_',
+    defaultLabels: { service: 'fe-testgen-mcp', version: '3.0.0' },
+  });
+
+  // 初始化缓存预热（异步执行，不阻塞启动）
+  const warmer = initializeCacheWarmer({
+    enabled: true,
+    preloadRepoPrompts: true,
+    preloadTestStacks: true,
+    preloadEmbeddings: config.embedding.enabled,
+  });
+  warmer.warmup().catch((error) => {
+    logger.warn('[Startup] Cache warmup failed', { error });
+  });
+
   getMetrics().recordCounter('server.initialization.success', 1);
   logger.info('Initialization complete', { 
     tools: toolRegistry.listMetadata().length,
@@ -130,10 +151,28 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
 async function main() {
   try {
     initialize();
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    logger.info('MCP server started');
-    getMetrics().recordCounter('server.started', 1);
+
+    // 检查是否使用 HTTP transport
+    const useHttp = process.argv.includes('--transport=http') || process.env.TRANSPORT_MODE === 'http';
+    const httpPort = parseInt(process.env.HTTP_PORT || '3000', 10);
+
+    if (useHttp) {
+      // HTTP Transport 模式
+      httpTransport = new HttpTransport(toolRegistry, {
+        port: httpPort,
+        host: '0.0.0.0',
+        cors: { origin: '*' },
+      });
+      await httpTransport.start();
+      logger.info('HTTP transport started', { port: httpPort });
+      getMetrics().recordCounter('server.started', 1, { transport: 'http' });
+    } else {
+      // 默认 Stdio Transport 模式
+      const transport = new StdioServerTransport();
+      await server.connect(transport);
+      logger.info('MCP server started', { transport: 'stdio' });
+      getMetrics().recordCounter('server.started', 1, { transport: 'stdio' });
+    }
   } catch (error) {
     logger.error('Server failed to start', { error });
     getMetrics().recordCounter('server.start.failed', 1);
@@ -141,10 +180,15 @@ async function main() {
   }
 }
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   logger.info('Shutting down...');
   getMetrics().recordCounter('server.shutdown', 1);
   memory.cleanup();
+
+  if (httpTransport) {
+    await httpTransport.stop();
+  }
+
   process.exit(0);
 });
 
