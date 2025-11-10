@@ -12,6 +12,7 @@ import { PhabricatorClient } from '../clients/phabricator.js';
 import { logger } from '../utils/logger.js';
 import type { Issue } from '../schemas/issue.js';
 import { getEnv } from '../config/env.js';
+import { extractRevisionId } from '../utils/revision.js';
 
 export interface PublishPhabricatorCommentsInput {
   revisionId: string;
@@ -58,7 +59,7 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
         properties: {
           revisionId: {
             type: 'string',
-            description: 'Revision ID（如 D551414）',
+            description: 'Phabricator Revision ID，必须以 D 开头后跟数字（如 D551414 或 D12345）。如果用户只提供数字（如 12345），请自动添加 D 前缀。支持从用户消息中提取，例如"publish comments for D12345"或"发布 D12345 的评论"',
           },
           issues: {
             type: 'array',
@@ -214,6 +215,15 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
   }
 
   protected async beforeExecute(input: PublishPhabricatorCommentsInput): Promise<void> {
+    // 规范化 revisionId
+    const normalized = extractRevisionId(input.revisionId);
+    if (normalized && normalized !== input.revisionId) {
+      logger.info(
+        `[PublishPhabricatorCommentsTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`
+      );
+      input.revisionId = normalized;
+    }
+
     // 验证输入
     if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
       throw new Error(`Invalid revision ID: ${input.revisionId}`);

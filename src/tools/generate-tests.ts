@@ -18,6 +18,7 @@ import { StateManager } from '../state/manager.js';
 import { ContextStore } from '../core/context.js';
 import { logger } from '../utils/logger.js';
 import type { TestCase } from '../schemas/test-plan.js';
+import { extractRevisionId } from '../utils/revision.js';
 
 export interface GenerateTestsInput {
   revisionId: string;
@@ -79,7 +80,7 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
         properties: {
           revisionId: {
             type: 'string',
-            description: 'Revision ID（如 D551414）',
+            description: 'Phabricator Revision ID，必须以 D 开头后跟数字（如 D551414 或 D12345）。如果用户只提供数字（如 12345），请自动添加 D 前缀。支持从用户消息中提取，例如"generate tests for D12345"或"帮我生成 D12345 的测试"',
           },
           projectRoot: {
             type: 'string',
@@ -199,6 +200,15 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
   }
 
   protected async beforeExecute(input: GenerateTestsInput): Promise<void> {
+    // 规范化 revisionId
+    const normalized = extractRevisionId(input.revisionId);
+    if (normalized && normalized !== input.revisionId) {
+      logger.info(
+        `[GenerateTestsTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`
+      );
+      input.revisionId = normalized;
+    }
+
     // 验证输入
     if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
       throw new Error(`Invalid revision ID: ${input.revisionId}`);

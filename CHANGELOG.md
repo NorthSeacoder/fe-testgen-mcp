@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.1.1] - 2024-11-10
+
+### 🐛 Bug Fixes
+
+- **Cursor Agent 聊天窗口 Revision ID 解析失败**: 修复在 Cursor 编辑器的 Agent 聊天窗口中输入自然语言请求（如"帮我 review 一下这个 diff D12345"）时无法正确提取 Revision ID 的问题
+  - 改进所有工具的 `revisionId` 参数描述，添加自然语言提取示例
+  - 新增 `extractRevisionId` 工具函数，支持从多种格式中智能提取 ID（D12345、12345、"diff 12345"等）
+  - 在所有相关工具的 `beforeExecute` 中自动规范化 Revision ID
+  - 支持的格式：
+    - `D12345` 或 `d12345` → `D12345`
+    - `12345` → `D12345`
+    - `"帮我 review 一下这个 diff D12345"` → `D12345`
+    - `"review this diff D12345"` → `D12345`
+    - `"D 12345"` (带空格) → `D12345`
+    - `"diff 12345"` → `D12345`
+
+### 📝 Documentation
+
+- 更新所有工具的 `inputSchema.revisionId` 描述，明确说明支持的输入格式和自动规范化行为
+
+---
+
 ## [3.1.0] - 2024-11-10
 
 ### 🎉 重大更新 - 完整工具集成
@@ -105,3 +127,4 @@
 ### Fixed
 - **评论行数错乱问题**: 通过优化 diff 格式和 AI prompt，确保评论始终使用新文件的正确行号
 - **删除行误报问题**: 明确标记已删除的行，避免 AI 对不存在的行发表评论
+- **Cursor Agent Revision ID 解析失败**: 改进 Revision ID 提取和校验逻辑，支持从自然语言请求中识别如“帮我 review 一下这个 diff D12345”这类输入

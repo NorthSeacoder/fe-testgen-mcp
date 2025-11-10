@@ -10,6 +10,7 @@ import { computeContentHash } from '../utils/fingerprint.js';
 import type { Diff } from '../schemas/diff.js';
 import { isFrontendFile } from '../schemas/diff.js';
 import { logger } from '../utils/logger.js';
+import { extractRevisionId } from '../utils/revision.js';
 
 export interface FetchDiffInput {
   revisionId: string;
@@ -50,7 +51,7 @@ export class FetchDiffTool extends BaseTool<FetchDiffInput, FetchDiffOutput> {
         properties: {
           revisionId: {
             type: 'string',
-            description: 'Revision ID（如 D551414）',
+            description: 'Phabricator Revision ID，必须以 D 开头后跟数字（如 D551414 或 D12345）。如果用户只提供数字（如 12345），请自动添加 D 前缀。支持从用户消息中提取，例如"review diff D12345"或"帮我 review 一下这个 diff D12345"',
           },
           forceRefresh: {
             type: 'boolean',
@@ -109,9 +110,16 @@ export class FetchDiffTool extends BaseTool<FetchDiffInput, FetchDiffOutput> {
   }
 
   protected async beforeExecute(input: FetchDiffInput): Promise<void> {
+    // 规范化 revisionId：智能提取和规范化
+    const normalized = extractRevisionId(input.revisionId);
+    if (normalized && normalized !== input.revisionId) {
+      logger.info(`[FetchDiffTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`);
+      input.revisionId = normalized;
+    }
+
     // 验证输入
     if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
-      throw new Error(`Invalid revision ID: ${input.revisionId}`);
+      throw new Error(`Invalid revision ID: ${input.revisionId}. Expected format: D followed by numbers (e.g., D12345)`);
     }
   }
 
