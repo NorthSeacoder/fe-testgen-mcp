@@ -8,6 +8,7 @@
  * 4. 返回生成的测试用例
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { TestAgent, TestAgentConfig } from '../agents/test-agent.js';
 import { FetchDiffTool } from './fetch-diff.js';
@@ -20,8 +21,21 @@ import { logger } from '../utils/logger.js';
 import type { TestCase } from '../schemas/test-plan.js';
 import { extractRevisionId } from '../utils/revision.js';
 
+// Zod schema for GenerateTestsInput
+export const GenerateTestsInputSchema = z.object({
+  revisionId: z.string().describe('REQUIRED. Phabricator Revision ID (e.g., "D538642" or "538642"). Extract from user message patterns like: "generate tests for D12345", "生成 D538642 的测试", "给 12345 写测试". If user provides only numbers, add "D" prefix.'),
+  diff: z.any().optional().describe('可选的 diff 对象（如果已通过 fetch-diff 获取）。如果提供此参数，将跳过重新获取 diff 的步骤。'),
+  projectRoot: z.string().optional().describe('项目根目录绝对路径（必须与 analyze-test-matrix 使用相同值）'),
+  scenarios: z.array(z.enum(['happy-path', 'edge-case', 'error-path', 'state-change'])).optional().describe('手动指定测试场景（可选）'),
+  mode: z.enum(['incremental', 'full']).optional().describe('增量或全量模式（默认 incremental）'),
+  maxTests: z.number().optional().describe('最大测试数量（可选）'),
+  forceRefresh: z.boolean().optional().describe('强制刷新缓存（默认 false）'),
+  framework: z.enum(['vitest', 'jest']).optional().describe('测试框架（可选，通常自动检测）'),
+});
+
 export interface GenerateTestsInput {
   revisionId: string;
+  diff?: any; // 可选的 diff 对象（如果已通过 fetch-diff 获取）
   projectRoot?: string; // 项目根目录（必须与 analyze-test-matrix 使用相同值）
   scenarios?: string[]; // 手动指定测试场景（可选）
   mode?: 'incremental' | 'full'; // 增量或全量模式（默认 incremental）
@@ -54,6 +68,11 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
     super();
   }
 
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return GenerateTestsInputSchema;
+  }
+
   getMetadata(): ToolMetadata {
     return {
       name: 'generate-tests',
@@ -69,10 +88,11 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
         '• 智能去重（基于测试 ID）\n' +
         '• 支持增量模式和全量模式\n' +
         '• 自动检测测试框架（Vitest/Jest）\n' +
-        '• Embedding 增强的测试生成\n\n' +
+        '• Embedding 增强的测试生成\n' +
+        '• 支持传入已获取的 diff 对象，避免重复请求\n\n' +
         '📝 推荐工作流：\n' +
         '1. 先调用 analyze-test-matrix 获取测试矩阵\n' +
-        '2. 使用相同的 projectRoot 调用此工具\n' +
+        '2. 使用相同的 projectRoot 调用此工具（可选传入 diff 对象避免重复请求）\n' +
         '3. 可选手动指定测试场景或使用自动生成\n\n' +
         '⚠️ 注意：projectRoot 参数必须与 analyze-test-matrix 使用相同的值。',
       inputSchema: {
@@ -80,7 +100,11 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
         properties: {
           revisionId: {
             type: 'string',
-            description: 'Phabricator Revision ID，必须以 D 开头后跟数字（如 D551414 或 D12345）。如果用户只提供数字（如 12345），请自动添加 D 前缀。支持从用户消息中提取，例如"generate tests for D12345"或"帮我生成 D12345 的测试"',
+            description: 'REQUIRED. Phabricator Revision ID (e.g., "D538642" or "538642"). Extract from user message patterns like: "generate tests for D12345", "生成 D538642 的测试", "给 12345 写测试". If user provides only numbers, add "D" prefix.',
+          },
+          diff: {
+            type: 'object',
+            description: '可选的 diff 对象（如果已通过 fetch-diff 获取）。如果提供此参数，将跳过重新获取 diff 的步骤。',
           },
           projectRoot: {
             type: 'string',
@@ -123,6 +147,7 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
   protected async executeImpl(input: GenerateTestsInput): Promise<GenerateTestsOutput> {
     const {
       revisionId,
+      diff: providedDiff,
       projectRoot,
       scenarios,
       mode = 'incremental',
@@ -131,10 +156,16 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
       framework,
     } = input;
 
-    // 1. 获取 diff
-    logger.info(`[GenerateTestsTool] Fetching diff for ${revisionId}...`);
-    const diffResult = await this.fetchDiffTool.fetch({ revisionId, forceRefresh });
-    const diff = this.fetchDiffTool.filterFrontendFiles(diffResult);
+    // 1. 获取 diff（如果没有提供）
+    let diff;
+    if (providedDiff) {
+      logger.info(`[GenerateTestsTool] Using provided diff for ${revisionId}`);
+      diff = this.fetchDiffTool.filterFrontendFiles(providedDiff);
+    } else {
+      logger.info(`[GenerateTestsTool] Fetching diff for ${revisionId}...`);
+      const diffResult = await this.fetchDiffTool.fetch({ revisionId, forceRefresh });
+      diff = this.fetchDiffTool.filterFrontendFiles(diffResult);
+    }
 
     if (diff.files.length === 0) {
       throw new Error(`No frontend files found in revision ${revisionId}`);

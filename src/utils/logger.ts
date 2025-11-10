@@ -9,6 +9,51 @@ const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '..');
 
 /**
+ * 序列化错误对象，确保 Error 对象的属性能被正确转换为 JSON
+ */
+export function serializeError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      ...(error as any), // 保留其他自定义属性
+    };
+  }
+  
+  if (typeof error === 'object' && error !== null) {
+    return error as Record<string, unknown>;
+  }
+  
+  return { message: String(error) };
+}
+
+/**
+ * 深度序列化对象中的所有错误对象
+ */
+function deepSerializeErrors(obj: any): any {
+  if (obj instanceof Error) {
+    return serializeError(obj);
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(deepSerializeErrors);
+  }
+  
+  if (typeof obj === 'object' && obj !== null) {
+    const result: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        result[key] = deepSerializeErrors(obj[key]);
+      }
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
+/**
  * 自定义 JSON 字符串化函数，保留中文字符不被转义
  */
 function jsonStringify(obj: unknown, indent?: number): string {
@@ -26,15 +71,17 @@ function jsonStringify(obj: unknown, indent?: number): string {
 }
 
 /**
- * 自定义 JSON 格式化器，保留中文字符不被转义
+ * 自定义 JSON 格式化器，保留中文字符不被转义，并序列化错误对象
  */
 const jsonFormat = format.printf((info) => {
   const { timestamp, level, message, ...meta } = info;
+  // 深度序列化 meta 中的所有错误对象
+  const serializedMeta = deepSerializeErrors(meta);
   const logEntry = {
     timestamp,
     level,
     message,
-    ...meta,
+    ...serializedMeta,
   };
   // 使用自定义的 JSON 字符串化函数
   return jsonStringify(logEntry);
@@ -50,7 +97,9 @@ const logFormat = format.combine(
 const consoleFormat = format.combine(
   format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   format.printf(({ timestamp, level, message, ...meta }) => {
-    const metaStr = Object.keys(meta).length ? jsonStringify(meta, 2) : '';
+    // 深度序列化 meta 中的所有错误对象
+    const serializedMeta = deepSerializeErrors(meta);
+    const metaStr = Object.keys(serializedMeta).length ? jsonStringify(serializedMeta, 2) : '';
     return `${timestamp} [${level}]: ${message} ${metaStr}`;
   })
 );

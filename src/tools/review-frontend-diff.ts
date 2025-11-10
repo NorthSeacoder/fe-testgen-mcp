@@ -7,6 +7,7 @@
  * 3. 可选发布评论到 Phabricator
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { ReviewAgent, ReviewAgentConfig } from '../agents/review-agent.js';
 import { FetchDiffTool } from './fetch-diff.js';
@@ -17,6 +18,17 @@ import { ContextStore } from '../core/context.js';
 import { logger } from '../utils/logger.js';
 import type { Issue } from '../schemas/issue.js';
 import { extractRevisionId } from '../utils/revision.js';
+
+// Zod schema for ReviewFrontendDiffInput
+export const ReviewFrontendDiffInputSchema = z.object({
+  revisionId: z.string().describe('REQUIRED. Phabricator Revision ID (e.g., "D538642" or "538642"). Extract from user message patterns like: "review D12345", "帮我 review 下这个 diff D538642", "看下 diff 12345". If user provides only numbers, add "D" prefix.'),
+  dimensions: z.array(z.enum(['react', 'typescript', 'performance', 'security', 'accessibility', 'css', 'i18n'])).optional().describe('手动指定审查维度（可选）'),
+  mode: z.enum(['incremental', 'full']).optional().describe('增量或全量模式（默认 incremental）'),
+  publish: z.boolean().optional().describe('是否发布评论到 Phabricator（默认 false）'),
+  forceRefresh: z.boolean().optional().describe('强制刷新缓存（默认 false）'),
+  minConfidence: z.number().optional().describe('最小置信度阈值，范围 0-1（默认 0.7）'),
+  projectRoot: z.string().optional().describe('项目根目录绝对路径（用于加载项目特定的审查规则）'),
+});
 
 export interface ReviewFrontendDiffInput {
   revisionId: string;
@@ -51,6 +63,11 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
     super();
   }
 
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return ReviewFrontendDiffInputSchema;
+  }
+
   getMetadata(): ToolMetadata {
     return {
       name: 'review-frontend-diff',
@@ -80,7 +97,7 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
         properties: {
           revisionId: {
             type: 'string',
-            description: 'Phabricator Revision ID，必须以 D 开头后跟数字（如 D551414 或 D12345）。如果用户只提供数字（如 12345），请自动添加 D 前缀。支持从用户消息中提取，例如"review this diff D12345"或"帮我 review 一下这个 diff D12345"',
+            description: 'REQUIRED. Phabricator Revision ID (e.g., "D538642" or "538642"). Extract from user message patterns like: "review D12345", "帮我 review 下这个 diff D538642", "看下 diff 12345". If user provides only numbers, add "D" prefix.',
           },
           dimensions: {
             type: 'array',

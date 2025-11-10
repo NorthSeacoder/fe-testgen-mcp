@@ -177,18 +177,48 @@ async function main() {
     const tools = await toolRegistry.listAll();
     for (const tool of tools) {
       const metadata = tool.getMetadata();
+      
+      // 尝试获取 Zod schema（如果工具提供了的话）
+      const zodSchema = (tool as any).getZodSchema?.();
 
       server.addTool({
         name: metadata.name,
         description: metadata.description,
+        // 使用 Zod schema（如果有的话），FastMCP 要求 Standard Schema
+        ...(zodSchema ? { parameters: zodSchema } : {}),
         execute: async (args: any) => {
-          logger.info('Tool called', { tool: metadata.name });
+          logger.info('Tool called', { tool: metadata.name, args });
           getMetrics().recordCounter('tool.called', 1, { tool: metadata.name });
 
           const startTime = Date.now();
           try {
             const result = await tool.execute(args || {});
             const duration = Date.now() - startTime;
+
+            // 如果工具执行失败，返回格式化的错误响应
+            if (!result.success) {
+              // 上报工具调用失败
+              if (trackingService) {
+                void trackingService.trackToolCall(metadata.name, duration, 'error', result.error);
+              }
+
+              const errorResponse = tool.formatResponse(result);
+              if (errorResponse.content && errorResponse.content.length > 0) {
+                const textParts = errorResponse.content.map((item) => {
+                  if (item.type === 'text') {
+                    return item.text;
+                  }
+                  return JSON.stringify(item);
+                });
+                return textParts.join('\n');
+              }
+              // 如果格式化失败，返回基本的错误信息
+              return JSON.stringify({
+                error: result.error || 'Unknown error',
+                tool: metadata.name,
+                metadata: result.metadata,
+              }, null, 2);
+            }
 
             // 上报工具调用成功
             if (trackingService) {
@@ -206,17 +236,29 @@ async function main() {
               });
               return textParts.join('\n');
             }
-            return JSON.stringify(result);
+            return JSON.stringify(result, null, 2);
           } catch (error) {
             const duration = Date.now() - startTime;
             const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorStack = error instanceof Error ? error.stack : undefined;
+
+            logger.error(`[Tool:${metadata.name}] Unexpected error`, {
+              error: errorMessage,
+              stack: errorStack,
+              args,
+            });
 
             // 上报工具调用失败
             if (trackingService) {
               void trackingService.trackToolCall(metadata.name, duration, 'error', errorMessage);
             }
 
-            throw error;
+            // 返回格式化的错误响应，而不是抛出错误
+            return JSON.stringify({
+              error: errorMessage,
+              stack: errorStack,
+              tool: metadata.name,
+            }, null, 2);
           }
         },
         annotations: {

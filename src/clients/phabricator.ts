@@ -83,7 +83,13 @@ export class PhabricatorClient {
 
       return content;
     } catch (error) {
-      logger.error(`Phabricator request failed: ${url}`, { error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      logger.error(`Phabricator request failed: ${url}`, { 
+        error: errorMessage,
+        stack: errorStack,
+        url 
+      });
       throw error;
     }
   }
@@ -246,7 +252,12 @@ export class PhabricatorClient {
       logger.info(`Found ${inlines.length} existing inline comments for D${revisionIdStr}`);
       return inlines;
     } catch (error) {
-      logger.warning(`Failed to get existing inlines: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      logger.warning(`Failed to get existing inlines for D${revisionIdStr}`, { 
+        error: errorMessage,
+        stack: errorStack
+      });
       return [];
     }
   }

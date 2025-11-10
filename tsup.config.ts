@@ -3,7 +3,7 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm'],
-  dts: true,
+  dts: false, // 暂时禁用类型定义生成以避免 FastMCP 类型错误
   splitting: false,
   sourcemap: true,
   clean: true,

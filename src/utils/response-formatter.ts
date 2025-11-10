@@ -23,21 +23,55 @@ export function formatJsonResponse(data: unknown) {
  * 格式化错误响应
  */
 export function formatErrorResponse(error: unknown) {
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  const errorStack = error instanceof Error ? error.stack : undefined;
+  let errorMessage: string;
+  let errorStack: string | undefined;
+  let errorDetails: Record<string, unknown> = {};
+
+  if (error instanceof Error) {
+    // 标准 Error 对象
+    errorMessage = error.message;
+    errorStack = error.stack;
+  } else if (typeof error === 'object' && error !== null) {
+    // 复杂错误对象（如 {tool, error, metadata}）
+    const errorObj = error as Record<string, unknown>;
+    
+    // 提取错误消息
+    if (typeof errorObj.error === 'string') {
+      errorMessage = errorObj.error;
+    } else if (errorObj.error instanceof Error) {
+      errorMessage = errorObj.error.message;
+      errorStack = errorObj.error.stack;
+    } else {
+      errorMessage = JSON.stringify(errorObj.error);
+    }
+    
+    // 保留其他字段
+    Object.keys(errorObj).forEach(key => {
+      if (key !== 'error') {
+        errorDetails[key] = errorObj[key];
+      }
+    });
+  } else {
+    // 其他类型（字符串、数字等）
+    errorMessage = String(error);
+  }
+
+  const response: Record<string, unknown> = {
+    error: errorMessage,
+  };
+
+  if (errorStack) {
+    response.stack = errorStack;
+  }
+
+  // 合并其他详细信息
+  Object.assign(response, errorDetails);
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(
-          {
-            error: errorMessage,
-            stack: errorStack,
-          },
-          null,
-          2
-        ),
+        text: JSON.stringify(response, null, 2),
       },
     ],
     isError: true,
