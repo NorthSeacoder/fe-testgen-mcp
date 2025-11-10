@@ -88,9 +88,11 @@ STATE_DIR=.state       # 默认值
 # 安全开关
 ALLOW_PUBLISH_COMMENTS=false  # 默认值，设为 true 允许发布评论
 
-# HTTP 传输模式配置（可选，默认使用 stdio）
-TRANSPORT_MODE=httpStream    # 设置为 httpStream 启用 HTTP 模式
-HTTP_PORT=3000               # HTTP 端口（默认 3000）
+# HTTP 传输模式配置（可选，默认在交互式终端使用 HTTP 模式）
+TRANSPORT_MODE=stdio        # 设置为 stdio 强制使用标准输入输出模式
+HTTP_PORT=3000              # HTTP 端口（默认 3000）
+HTTP_HOST=0.0.0.0           # HTTP 监听地址（默认 localhost）
+HTTP_ENDPOINT=/mcp          # HTTP MCP 接入路径（默认 /mcp）
 
 # 监控数据上报配置（可选，默认不启用）
 TRACKING_ENABLED=true                # 设置为 true 启用监控上报（默认不启用）
@@ -235,36 +237,77 @@ EOF
 
 本项目基于 `fastmcp` 库实现，提供简化的 API 和内置 HTTP Streaming 支持。
 
-#### Stdio 模式（默认）
+#### 快速启动（自动检测模式）
 
 ```bash
 npm start
 ```
 
-- 通过 stdio 与客户端通信
-- 兼容所有支持 MCP 协议的客户端（如 Cursor、Claude Desktop）
-- **Cursor 端口配置**：在 MCP 配置文件中无需设置端口，只需指向 `node dist/index.js` 即可
+**智能模式选择**：
+- 🖥️ **交互式终端**：自动使用 HTTP Streaming 模式，显示完整的服务器 URL 和端口
+- 📡 **非交互式/管道**：自动使用 Stdio 模式（适用于 MCP 客户端调用）
 
-#### HTTP Streaming 模式
+启动后会显示类似以下信息：
+
+```
+============================================================
+🚀 fe-testgen-mcp Server Started (HTTP Streaming Mode)
+============================================================
+📍 Server URL: http://localhost:3000/mcp
+📡 Host: localhost
+📡 Port: 3000
+📋 MCP Endpoint: /mcp
+============================================================
+
+📝 Add to your MCP client configuration:
+
+  "fe-testgen-mcp": {
+    "url": "http://localhost:3000/mcp"
+  }
+
+============================================================
+```
+
+只需复制 URL 到你的 MCP 客户端配置即可。
+
+#### 强制使用 Stdio 模式
+
+如果需要在交互式终端中使用 Stdio 模式：
 
 ```bash
 # 方法 1：命令行参数
-npm start -- --transport=httpStream
+npm start -- --transport stdio
 
 # 方法 2：环境变量
-TRANSPORT_MODE=httpStream HTTP_PORT=3000 npm start
+TRANSPORT_MODE=stdio npm start
+```
+
+- 通过 stdio 与客户端通信
+- 兼容所有支持 MCP 协议的客户端（如 Cursor、Claude Desktop）
+- **注意**：Stdio 模式下会出现 "could not infer client capabilities" 警告是正常的（如果没有 MCP 客户端连接）
+
+#### HTTP Streaming 模式配置
+
+如果需要自定义 HTTP 服务器配置：
+
+```bash
+# 方法 1：命令行参数
+npm start -- --transport httpStream --port 8080 --host 0.0.0.0 --endpoint /api/mcp
+
+# 方法 2：环境变量
+TRANSPORT_MODE=httpStream HTTP_PORT=8080 HTTP_HOST=0.0.0.0 HTTP_ENDPOINT=/api/mcp npm start
 ```
 
 **端点说明**：
-- `POST http://localhost:3000/mcp` - MCP 主端点（HTTP Streaming）
+- `POST http://localhost:3000/mcp` - MCP 主端点（HTTP Streaming，默认）
 - `GET http://localhost:3000/sse` - SSE 端点（自动可用）
-- **Cursor 端口配置**：HTTP 模式下需要将 MCP 客户端配置为 `http://localhost:3000/mcp`
 
 **FastMCP 特性**：
 - ✅ 内置 HTTP Streaming / SSE 支持
 - ✅ 自动工具注册和连接管理
 - ✅ 简化的 API 设计
 - ✅ 完整的监控数据上报功能
+- ✅ 智能模式检测，开箱即用
 
 #### 监控数据上报（可选）
 

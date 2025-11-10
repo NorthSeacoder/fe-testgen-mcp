@@ -224,23 +224,85 @@ async function main() {
     }
 
     // 检查传输模式
-    const useHttpStream =
+    // 优先级: 命令行参数 > 环境变量 > 自动检测(TTY = HTTP, 非TTY = stdio)
+    const argv = process.argv.slice(2);
+
+    const getArgValue = (flag: string): string | undefined => {
+      const withEquals = argv.find((arg) => arg.startsWith(`${flag}=`));
+      if (withEquals) {
+        return withEquals.split('=')[1];
+      }
+
+      const index = argv.indexOf(flag);
+      if (index !== -1 && index + 1 < argv.length) {
+        return argv[index + 1];
+      }
+      return undefined;
+    };
+
+    const transportArg = getArgValue('--transport');
+
+    const explicitHttpStream =
+      transportArg?.toLowerCase() === 'httpstream' ||
+      transportArg?.toLowerCase() === 'http-stream' ||
       process.argv.includes('--transport=httpStream') ||
       process.argv.includes('--transport=http-stream') ||
       process.env.TRANSPORT_MODE === 'httpStream' ||
       process.env.TRANSPORT_MODE === 'http-stream';
-    const httpPort = parseInt(process.env.HTTP_PORT || '3000', 10);
+
+    const explicitStdio =
+      transportArg?.toLowerCase() === 'stdio' ||
+      process.argv.includes('--transport=stdio') ||
+      process.env.TRANSPORT_MODE === 'stdio';
+
+    // 自动检测: 如果是 TTY（交互式终端），默认使用 HTTP 模式
+    const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const useHttpStream = explicitHttpStream || (!explicitStdio && isInteractive);
+
+    const portArg = getArgValue('--port');
+    const httpPort = parseInt(portArg || process.env.HTTP_PORT || '3000', 10);
+
+    const hostArg = getArgValue('--host');
+    const httpHost = hostArg || process.env.HTTP_HOST || 'localhost';
+
+    const endpointArg = getArgValue('--endpoint');
+    const httpEndpoint = (endpointArg || process.env.HTTP_ENDPOINT || '/mcp') as `/${string}`;
 
     if (useHttpStream) {
       // FastMCP HTTP Streaming 模式
-      server.start({
+      await server.start({
         transportType: 'httpStream',
         httpStream: {
           port: httpPort,
-          endpoint: '/mcp',
+          host: httpHost,
+          endpoint: httpEndpoint,
         },
       });
-      logger.info('FastMCP HTTP streaming started', { port: httpPort });
+
+      const displayHost = httpHost === '0.0.0.0' ? 'localhost' : httpHost;
+      const serverUrl = `http://${displayHost}:${httpPort}${httpEndpoint}`;
+
+      // 在控制台显示明显的启动信息
+      console.log('\n' + '='.repeat(60));
+      console.log('🚀 fe-testgen-mcp Server Started (HTTP Streaming Mode)');
+      console.log('='.repeat(60));
+      console.log(`📍 Server URL: ${serverUrl}`);
+      console.log(`📡 Host: ${httpHost}`);
+      console.log(`📡 Port: ${httpPort}`);
+      console.log(`📋 MCP Endpoint: ${httpEndpoint}`);
+      console.log('='.repeat(60));
+      console.log('\n📝 Add to your MCP client configuration:');
+      console.log(`\n  "fe-testgen-mcp": {`);
+      console.log(`    "url": "${serverUrl}"`);
+      console.log(`  }`);
+      console.log('\n' + '='.repeat(60) + '\n');
+
+      logger.info('FastMCP HTTP streaming started', {
+        port: httpPort,
+        host: httpHost,
+        url: serverUrl,
+        endpoint: httpEndpoint,
+      });
       getMetrics().recordCounter('server.started', 1, { transport: 'httpStream' });
 
       if (trackingService) {
@@ -250,8 +312,8 @@ async function main() {
         });
       }
     } else {
-      // 默认 Stdio 模式
-      server.start({
+      // Stdio 模式
+      await server.start({
         transportType: 'stdio',
       });
       logger.info('FastMCP server started', { transport: 'stdio' });
