@@ -226,8 +226,7 @@ async function main() {
       });
     }
 
-    // 检查传输模式
-    // 优先级: 命令行参数 > 环境变量 > 自动检测(TTY = HTTP, 非TTY = stdio)
+    // 启动 FastMCP HTTP Streaming 服务
     const argv = process.argv.slice(2);
 
     const getArgValue = (flag: string): string | undefined => {
@@ -243,25 +242,6 @@ async function main() {
       return undefined;
     };
 
-    const transportArg = getArgValue('--transport');
-
-    const explicitHttpStream =
-      transportArg?.toLowerCase() === 'httpstream' ||
-      transportArg?.toLowerCase() === 'http-stream' ||
-      process.argv.includes('--transport=httpStream') ||
-      process.argv.includes('--transport=http-stream') ||
-      process.env.TRANSPORT_MODE === 'httpStream' ||
-      process.env.TRANSPORT_MODE === 'http-stream';
-
-    const explicitStdio =
-      transportArg?.toLowerCase() === 'stdio' ||
-      process.argv.includes('--transport=stdio') ||
-      process.env.TRANSPORT_MODE === 'stdio';
-
-    // 自动检测: 如果是 TTY（交互式终端），默认使用 HTTP 模式
-    const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-    const useHttpStream = explicitHttpStream || (!explicitStdio && isInteractive);
-
     const portArg = getArgValue('--port');
     const httpPort = parseInt(portArg || process.env.HTTP_PORT || '3000', 10);
 
@@ -271,65 +251,49 @@ async function main() {
     const endpointArg = getArgValue('--endpoint');
     const httpEndpoint = (endpointArg || process.env.HTTP_ENDPOINT || '/mcp') as `/${string}`;
 
-    if (useHttpStream) {
-      // FastMCP HTTP Streaming 模式
-      await server.start({
-        transportType: 'httpStream',
-        httpStream: {
-          port: httpPort,
-          host: httpHost,
-          endpoint: httpEndpoint,
-          stateless: true,
-        },
-      });
-
-      const displayHost = httpHost === '0.0.0.0' ? 'localhost' : httpHost;
-      const serverUrl = `http://${displayHost}:${httpPort}${httpEndpoint}`;
-
-      // 在控制台显示明显的启动信息
-      console.log('\n' + '='.repeat(60));
-      console.log('🚀 fe-testgen-mcp Server Started (HTTP Streaming Mode)');
-      console.log('='.repeat(60));
-      console.log(`📍 Server URL: ${serverUrl}`);
-      console.log(`📡 Host: ${httpHost}`);
-      console.log(`📡 Port: ${httpPort}`);
-      console.log(`📋 MCP Endpoint: ${httpEndpoint}`);
-      console.log(`🔄 Mode: Stateless (SSE compatible)`);
-      console.log(`🛠️  Tools: ${toolRegistry.listMetadata().length} registered`);
-      console.log('='.repeat(60));
-      console.log('\n📝 Add to your MCP client configuration:');
-      console.log(`\n  "fe-testgen-mcp": {`);
-      console.log(`    "url": "${serverUrl}"`);
-      console.log(`  }`);
-      console.log('\n' + '='.repeat(60) + '\n');
-
-      logger.info('FastMCP HTTP streaming started', {
+    await server.start({
+      transportType: 'httpStream',
+      httpStream: {
         port: httpPort,
         host: httpHost,
-        url: serverUrl,
         endpoint: httpEndpoint,
-      });
-      getMetrics().recordCounter('server.started', 1, { transport: 'httpStream' });
+        stateless: true,
+      },
+    });
 
-      if (trackingService) {
-        void trackingService.trackServerEvent('started', {
-          transport: 'httpStream',
-          port: httpPort,
-        });
-      }
-    } else {
-      // Stdio 模式
-      await server.start({
-        transportType: 'stdio',
-      });
-      logger.info('FastMCP server started', { transport: 'stdio' });
-      getMetrics().recordCounter('server.started', 1, { transport: 'stdio' });
+    const displayHost = httpHost === '0.0.0.0' ? 'localhost' : httpHost;
+    const serverUrl = `http://${displayHost}:${httpPort}${httpEndpoint}`;
 
-      if (trackingService) {
-        void trackingService.trackServerEvent('started', {
-          transport: 'stdio',
-        });
-      }
+    // 在控制台显示明显的启动信息
+    console.log('\n' + '='.repeat(60));
+    console.log('🚀 fe-testgen-mcp Server Started (HTTP Streaming Mode)');
+    console.log('='.repeat(60));
+    console.log(`📍 Server URL: ${serverUrl}`);
+    console.log(`📡 Host: ${httpHost}`);
+    console.log(`📡 Port: ${httpPort}`);
+    console.log(`📋 MCP Endpoint: ${httpEndpoint}`);
+    console.log(`🔄 Mode: Stateless (SSE compatible)`);
+    console.log(`🛠️  Tools: ${toolRegistry.listMetadata().length} registered`);
+    console.log('='.repeat(60));
+    console.log('\n📝 Add to your MCP client configuration:');
+    console.log(`\n  "fe-testgen-mcp": {`);
+    console.log(`    "url": "${serverUrl}"`);
+    console.log(`  }`);
+    console.log('\n' + '='.repeat(60) + '\n');
+
+    logger.info('FastMCP HTTP streaming started', {
+      port: httpPort,
+      host: httpHost,
+      url: serverUrl,
+      endpoint: httpEndpoint,
+    });
+    getMetrics().recordCounter('server.started', 1, { transport: 'httpStream' });
+
+    if (trackingService) {
+      void trackingService.trackServerEvent('started', {
+        transport: 'httpStream',
+        port: httpPort,
+      });
     }
   } catch (error) {
     logger.error('Server failed to start', { error });
