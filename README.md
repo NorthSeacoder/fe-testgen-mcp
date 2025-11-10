@@ -288,6 +288,8 @@ TRANSPORT_MODE=stdio npm start
 
 #### HTTP Streaming 模式配置
 
+HTTP Streaming 默认以 **Stateless** 模式运行，以确保与 mcp-proxy、Claude Desktop 等 SSE 客户端的兼容性。每个请求都会自动创建独立会话，无需手动管理 `Mcp-Session-Id`。
+
 如果需要自定义 HTTP 服务器配置：
 
 ```bash
@@ -301,6 +303,10 @@ TRANSPORT_MODE=httpStream HTTP_PORT=8080 HTTP_HOST=0.0.0.0 HTTP_ENDPOINT=/api/mc
 **端点说明**：
 - `POST http://localhost:3000/mcp` - MCP 主端点（HTTP Streaming，默认）
 - `GET http://localhost:3000/sse` - SSE 端点（自动可用）
+
+**兼容性提示**：
+- ✅ Stateless 模式会自动携带全部工具列表，避免「tools not recognized」问题
+- ✅ 与 mcp-proxy 的 SSE 日志 `[mcp-proxy] establishing new SSE stream ...` 完全兼容
 
 **FastMCP 特性**：
 - ✅ 内置 HTTP Streaming / SSE 支持

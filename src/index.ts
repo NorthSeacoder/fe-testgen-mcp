@@ -181,7 +181,6 @@ async function main() {
       server.addTool({
         name: metadata.name,
         description: metadata.description,
-        parameters: metadata.inputSchema as any,
         execute: async (args: any) => {
           logger.info('Tool called', { tool: metadata.name });
           getMetrics().recordCounter('tool.called', 1, { tool: metadata.name });
@@ -219,6 +218,10 @@ async function main() {
 
             throw error;
           }
+        },
+        annotations: {
+          readOnlyHint: false,
+          idempotentHint: false,
         },
       });
     }
@@ -276,6 +279,7 @@ async function main() {
           port: httpPort,
           host: httpHost,
           endpoint: httpEndpoint,
+          stateless: true,
         },
       });
 
@@ -290,6 +294,8 @@ async function main() {
       console.log(`📡 Host: ${httpHost}`);
       console.log(`📡 Port: ${httpPort}`);
       console.log(`📋 MCP Endpoint: ${httpEndpoint}`);
+      console.log(`🔄 Mode: Stateless (SSE compatible)`);
+      console.log(`🛠️  Tools: ${toolRegistry.listMetadata().length} registered`);
       console.log('='.repeat(60));
       console.log('\n📝 Add to your MCP client configuration:');
       console.log(`\n  "fe-testgen-mcp": {`);
