@@ -279,7 +279,7 @@ async function main() {
           port: httpPort,
           host: httpHost,
           endpoint: httpEndpoint,
-          stateless: true,
+          stateless: false,
         },
       });
 
@@ -294,7 +294,7 @@ async function main() {
       console.log(`📡 Host: ${httpHost}`);
       console.log(`📡 Port: ${httpPort}`);
       console.log(`📋 MCP Endpoint: ${httpEndpoint}`);
-      console.log(`🔄 Mode: Stateless (SSE compatible)`);
+      console.log(`🔄 Mode: Stateful (Session-based, SSE compatible)`);
       console.log(`🛠️  Tools: ${toolRegistry.listMetadata().length} registered`);
       console.log('='.repeat(60));
       console.log('\n📝 Add to your MCP client configuration:');
