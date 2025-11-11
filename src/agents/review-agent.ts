@@ -422,23 +422,20 @@ export class ReviewAgent {
   /**
    * 跨维度去重：移除不同维度报告的相同问题
    * 
-   * 策略：
-   * 1. 按文件+行号分组
-   * 2. 对每组内的问题提取核心内容
-   * 3. 如果核心内容高度相似（文本相似度 > 80%），认为是重复
+   * 优化策略：
+   * 1. 按文件+代码片段分组（更精确的定位）
+   * 2. 对每组内的问题计算综合相似度（message + suggestion）
+   * 3. 相似度 > 85% 认为是重复（更严格的阈值）
    * 4. 保留置信度最高的问题
    */
   private deduplicateIssuesAcrossDimensions(issues: Issue[]): Issue[] {
     if (issues.length === 0) return issues;
 
-    // 按文件+位置分组（使用 ±2 行的范围）
+    // 按文件+代码片段分组
     const groups = new Map<string, Issue[]>();
     
     for (const issue of issues) {
-      // 如果有行号，使用行号分组；否则使用代码片段
-      const location = issue.line 
-        ? `${issue.file}:${Math.floor(issue.line / 3) * 3}` // 每3行为一组，减少精确匹配要求
-        : `${issue.file}:${issue.codeSnippet?.substring(0, 30) || 'unknown'}`;
+      const location = this.generateIssueLocationKey(issue);
       
       if (!groups.has(location)) {
         groups.set(location, []);
@@ -451,46 +448,52 @@ export class ReviewAgent {
     // 对每组进行去重
     for (const [location, groupIssues] of groups.entries()) {
       if (groupIssues.length === 1) {
-        // 只有一个问题，直接保留
         deduplicated.push(groupIssues[0]);
         continue;
       }
 
       // 多个问题，需要去重
-      const kept = new Set<number>();
+      const processed = new Set<number>();
       
       for (let i = 0; i < groupIssues.length; i++) {
-        if (kept.has(i)) continue;
+        if (processed.has(i)) continue;
         
-        let bestIssue = groupIssues[i];
-        let bestConfidence = groupIssues[i].confidence;
+        const duplicates: number[] = [i];
         
-        // 与后续问题比较
+        // 查找所有与当前问题重复的问题
         for (let j = i + 1; j < groupIssues.length; j++) {
-          if (kept.has(j)) continue;
+          if (processed.has(j)) continue;
           
           const similarity = this.calculateIssueSimilarity(groupIssues[i], groupIssues[j]);
           
-          if (similarity > 0.80) { // 80% 相似度认为是重复
+          if (similarity > 0.85) {
+            duplicates.push(j);
+            processed.add(j);
+            
             logger.debug('[ReviewAgent] Found duplicate issue across dimensions', {
               location,
-              issue1: { topic: groupIssues[i].topic, message: groupIssues[i].message.substring(0, 50) },
-              issue2: { topic: groupIssues[j].topic, message: groupIssues[j].message.substring(0, 50) },
-              similarity: similarity.toFixed(2),
+              issue1: { 
+                topic: groupIssues[i].topic, 
+                message: groupIssues[i].message.substring(0, 50),
+                confidence: groupIssues[i].confidence 
+              },
+              issue2: { 
+                topic: groupIssues[j].topic, 
+                message: groupIssues[j].message.substring(0, 50),
+                confidence: groupIssues[j].confidence
+              },
+              similarity: similarity.toFixed(3),
             });
-            
-            // 保留置信度更高的
-            if (groupIssues[j].confidence > bestConfidence) {
-              bestIssue = groupIssues[j];
-              bestConfidence = groupIssues[j].confidence;
-            }
-            
-            kept.add(j); // 标记为已处理
           }
         }
         
-        deduplicated.push(bestIssue);
-        kept.add(i);
+        // 从重复的问题中选择最佳的（置信度最高）
+        const bestIndex = duplicates.reduce((best, idx) => 
+          groupIssues[idx].confidence > groupIssues[best].confidence ? idx : best
+        , duplicates[0]);
+        
+        deduplicated.push(groupIssues[bestIndex]);
+        processed.add(i);
       }
     }
 
@@ -498,16 +501,49 @@ export class ReviewAgent {
   }
 
   /**
-   * 计算两个问题的相似度（基于核心内容的文本相似度）
+   * 生成问题的位置键（用于分组）
+   */
+  private generateIssueLocationKey(issue: Issue): string {
+    if (issue.codeSnippet) {
+      const normalizedSnippet = issue.codeSnippet
+        .trim()
+        .replace(/\s+/g, ' ')
+        .substring(0, 100);
+      return `${issue.file}:${normalizedSnippet}`;
+    }
+    
+    if (issue.line) {
+      return `${issue.file}:${Math.floor(issue.line / 2) * 2}`;
+    }
+    
+    return `${issue.file}:unknown`;
+  }
+
+  /**
+   * 计算两个问题的相似度（综合考虑 message 和 suggestion）
    */
   private calculateIssueSimilarity(issue1: Issue, issue2: Issue): number {
-    // 提取核心内容（去除格式、维度、置信度等）
-    const core1 = this.extractIssueCore(issue1.message);
-    const core2 = this.extractIssueCore(issue2.message);
+    const messageCore1 = this.extractIssueCore(issue1.message);
+    const messageCore2 = this.extractIssueCore(issue2.message);
+    const suggestionCore1 = this.extractIssueCore(issue1.suggestion);
+    const suggestionCore2 = this.extractIssueCore(issue2.suggestion);
     
-    // 使用简单的文本相似度算法（Jaccard 相似度）
-    const words1 = new Set(core1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
-    const words2 = new Set(core2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    // 计算 message 相似度
+    const messageSimilarity = this.calculateTextSimilarity(messageCore1, messageCore2);
+    
+    // 计算 suggestion 相似度
+    const suggestionSimilarity = this.calculateTextSimilarity(suggestionCore1, suggestionCore2);
+    
+    // 综合相似度：message 权重 0.6，suggestion 权重 0.4
+    return messageSimilarity * 0.6 + suggestionSimilarity * 0.4;
+  }
+
+  /**
+   * 计算两段文本的相似度（Jaccard 相似度）
+   */
+  private calculateTextSimilarity(text1: string, text2: string): number {
+    const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
     
     if (words1.size === 0 && words2.size === 0) return 1.0;
     if (words1.size === 0 || words2.size === 0) return 0.0;
@@ -521,8 +557,8 @@ export class ReviewAgent {
   /**
    * 提取问题的核心内容（去除格式和元数据）
    */
-  private extractIssueCore(message: string): string {
-    let core = message;
+  private extractIssueCore(text: string): string {
+    let core = text;
     
     // 去除 emoji 和格式标记
     core = core.replace(/[🚨⚠️ℹ️💡]/g, '');
@@ -534,8 +570,9 @@ export class ReviewAgent {
     core = core.replace(/置信度[:：]\s*\d+%/gi, '');
     core = core.replace(/维度[:：]\s*\S+/gi, '');
     
-    // 只保留主要问题描述（通常在第一行或第一句）
-    const firstLine = core.split('\n')[0].trim();
-    return firstLine || core.trim();
+    // 去除建议前缀
+    core = core.replace(/^(?:建议|suggestion)[:：]\s*/gi, '');
+    
+    return core.trim();
   }
 }
