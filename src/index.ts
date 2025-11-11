@@ -126,7 +126,7 @@ function initialize() {
     new GenerateTestsTool(openai, embedding, state, contextStore, fetchDiffTool)
   );
 
-  toolRegistry.register(new PublishPhabricatorCommentsTool(phabricator));
+  toolRegistry.register(new PublishPhabricatorCommentsTool(phabricator, embedding));
   toolRegistry.register(new WriteTestFileTool());
   toolRegistry.register(new RunTestsTool());
   toolRegistry.register(new AnalyzeRawDiffTestMatrixTool(openai, state));

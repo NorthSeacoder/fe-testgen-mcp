@@ -355,18 +355,27 @@ export class ReviewAgent {
       }
     }
 
-    // 过滤低置信度的问题
+    // ✅ 步骤1: 跨维度去重
+    const deduplicatedIssues = this.deduplicateIssuesAcrossDimensions(allIssues);
+    logger.info('[ReviewAgent] Cross-dimension deduplication completed', {
+      before: allIssues.length,
+      after: deduplicatedIssues.length,
+      removed: allIssues.length - deduplicatedIssues.length,
+    });
+
+    // ✅ 步骤2: 过滤低置信度的问题
     const minConfidence = config.minConfidence ?? 0.7;
-    const filtered = allIssues.filter((issue) => issue.confidence >= minConfidence);
+    const filtered = deduplicatedIssues.filter((issue) => issue.confidence >= minConfidence);
 
     logger.info('[ReviewAgent] Review completed', {
       totalIssues: allIssues.length,
+      deduplicatedIssues: deduplicatedIssues.length,
       filteredIssues: filtered.length,
       minConfidence,
     });
 
     this.addThought(context, {
-      content: `Found ${allIssues.length} issues, ${filtered.length} after filtering (min confidence: ${minConfidence})`,
+      content: `Found ${allIssues.length} issues, ${deduplicatedIssues.length} after deduplication, ${filtered.length} after filtering (min confidence: ${minConfidence})`,
       timestamp: Date.now(),
     });
 
@@ -408,5 +417,125 @@ export class ReviewAgent {
 
   private generateSessionId(): string {
     return `review-agent-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  }
+
+  /**
+   * 跨维度去重：移除不同维度报告的相同问题
+   * 
+   * 策略：
+   * 1. 按文件+行号分组
+   * 2. 对每组内的问题提取核心内容
+   * 3. 如果核心内容高度相似（文本相似度 > 80%），认为是重复
+   * 4. 保留置信度最高的问题
+   */
+  private deduplicateIssuesAcrossDimensions(issues: Issue[]): Issue[] {
+    if (issues.length === 0) return issues;
+
+    // 按文件+位置分组（使用 ±2 行的范围）
+    const groups = new Map<string, Issue[]>();
+    
+    for (const issue of issues) {
+      // 如果有行号，使用行号分组；否则使用代码片段
+      const location = issue.line 
+        ? `${issue.file}:${Math.floor(issue.line / 3) * 3}` // 每3行为一组，减少精确匹配要求
+        : `${issue.file}:${issue.codeSnippet?.substring(0, 30) || 'unknown'}`;
+      
+      if (!groups.has(location)) {
+        groups.set(location, []);
+      }
+      groups.get(location)!.push(issue);
+    }
+
+    const deduplicated: Issue[] = [];
+
+    // 对每组进行去重
+    for (const [location, groupIssues] of groups.entries()) {
+      if (groupIssues.length === 1) {
+        // 只有一个问题，直接保留
+        deduplicated.push(groupIssues[0]);
+        continue;
+      }
+
+      // 多个问题，需要去重
+      const kept = new Set<number>();
+      
+      for (let i = 0; i < groupIssues.length; i++) {
+        if (kept.has(i)) continue;
+        
+        let bestIssue = groupIssues[i];
+        let bestConfidence = groupIssues[i].confidence;
+        
+        // 与后续问题比较
+        for (let j = i + 1; j < groupIssues.length; j++) {
+          if (kept.has(j)) continue;
+          
+          const similarity = this.calculateIssueSimilarity(groupIssues[i], groupIssues[j]);
+          
+          if (similarity > 0.80) { // 80% 相似度认为是重复
+            logger.debug('[ReviewAgent] Found duplicate issue across dimensions', {
+              location,
+              issue1: { topic: groupIssues[i].topic, message: groupIssues[i].message.substring(0, 50) },
+              issue2: { topic: groupIssues[j].topic, message: groupIssues[j].message.substring(0, 50) },
+              similarity: similarity.toFixed(2),
+            });
+            
+            // 保留置信度更高的
+            if (groupIssues[j].confidence > bestConfidence) {
+              bestIssue = groupIssues[j];
+              bestConfidence = groupIssues[j].confidence;
+            }
+            
+            kept.add(j); // 标记为已处理
+          }
+        }
+        
+        deduplicated.push(bestIssue);
+        kept.add(i);
+      }
+    }
+
+    return deduplicated;
+  }
+
+  /**
+   * 计算两个问题的相似度（基于核心内容的文本相似度）
+   */
+  private calculateIssueSimilarity(issue1: Issue, issue2: Issue): number {
+    // 提取核心内容（去除格式、维度、置信度等）
+    const core1 = this.extractIssueCore(issue1.message);
+    const core2 = this.extractIssueCore(issue2.message);
+    
+    // 使用简单的文本相似度算法（Jaccard 相似度）
+    const words1 = new Set(core1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    const words2 = new Set(core2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    
+    if (words1.size === 0 && words2.size === 0) return 1.0;
+    if (words1.size === 0 || words2.size === 0) return 0.0;
+    
+    const intersection = new Set([...words1].filter(w => words2.has(w)));
+    const union = new Set([...words1, ...words2]);
+    
+    return intersection.size / union.size;
+  }
+
+  /**
+   * 提取问题的核心内容（去除格式和元数据）
+   */
+  private extractIssueCore(message: string): string {
+    let core = message;
+    
+    // 去除 emoji 和格式标记
+    core = core.replace(/[🚨⚠️ℹ️💡]/g, '');
+    core = core.replace(/\*\*/g, '');
+    core = core.replace(/`/g, '');
+    
+    // 去除等级、置信度、维度等元数据
+    core = core.replace(/(?:CRITICAL|HIGH|MEDIUM|LOW):\s*/gi, '');
+    core = core.replace(/置信度[:：]\s*\d+%/gi, '');
+    core = core.replace(/维度[:：]\s*\S+/gi, '');
+    
+    // 只保留主要问题描述（通常在第一行或第一句）
+    const firstLine = core.split('\n')[0].trim();
+    return firstLine || core.trim();
   }
 }

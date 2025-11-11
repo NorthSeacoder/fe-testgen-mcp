@@ -12,7 +12,7 @@ llm:
 embedding:
   baseURL: ${EMBEDDING_BASE_URL}
   model: ${EMBEDDING_MODEL}
-  enabled: false  # 暂时禁用 embedding 去重，使用签名匹配
+  enabled: true  # 暂时禁用 embedding 去重，使用签名匹配
 
 phabricator:
   host: ${PHABRICATOR_HOST}
