@@ -17,7 +17,6 @@ import { StateManager } from '../state/manager.js';
 import { ContextStore } from '../core/context.js';
 import { logger } from '../utils/logger.js';
 import type { Issue } from '../schemas/issue.js';
-import { extractRevisionId } from '../utils/revision.js';
 
 // Zod schema for ReviewFrontendDiffInput
 export const ReviewFrontendDiffInputSchema = z.object({
@@ -221,28 +220,6 @@ export class ReviewFrontendDiffTool extends BaseTool<ReviewFrontendDiffInput, Re
       publishedToPhab: result.published ?? false,
       summary,
     };
-  }
-
-  protected async beforeExecute(input: ReviewFrontendDiffInput): Promise<void> {
-    // 规范化 revisionId：智能提取和规范化
-    const normalized = extractRevisionId(input.revisionId);
-    if (normalized && normalized !== input.revisionId) {
-      logger.info(`[ReviewFrontendDiffTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`);
-      input.revisionId = normalized;
-    }
-
-    // 验证输入
-    if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
-      throw new Error(`Invalid revision ID: ${input.revisionId}. Expected format: D followed by numbers (e.g., D12345)`);
-    }
-
-    if (input.minConfidence !== undefined && (input.minConfidence < 0 || input.minConfidence > 1)) {
-      throw new Error(`minConfidence must be between 0 and 1, got: ${input.minConfidence}`);
-    }
-
-    if (input.publish) {
-      logger.warn('[ReviewFrontendDiffTool] Auto-publish is enabled, comments will be posted to Phabricator');
-    }
   }
 
   private generateSummary(issues: Issue[]): {

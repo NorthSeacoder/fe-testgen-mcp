@@ -7,11 +7,20 @@
  * 3. 支持预览模式
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { logger } from '../utils/logger.js';
 import type { TestCase } from '../schemas/test-plan.js';
+
+// Zod schema for WriteTestFileInput
+export const WriteTestFileInputSchema = z.object({
+  tests: z.array(z.any()).describe('测试用例列表'),
+  projectRoot: z.string().optional().describe('项目根目录绝对路径（必需）'),
+  dryRun: z.boolean().optional().describe('预览模式，不实际写入（默认 false）'),
+  overwrite: z.boolean().optional().describe('是否覆盖已存在的文件（默认 false）'),
+});
 
 export interface WriteTestFileInput {
   tests: TestCase[];
@@ -33,6 +42,11 @@ export interface WriteTestFileOutput {
 }
 
 export class WriteTestFileTool extends BaseTool<WriteTestFileInput, WriteTestFileOutput> {
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return WriteTestFileInputSchema;
+  }
+
   getMetadata(): ToolMetadata {
     return {
       name: 'write-test-file',
@@ -172,16 +186,6 @@ export class WriteTestFileTool extends BaseTool<WriteTestFileInput, WriteTestFil
         byFramework,
       },
     };
-  }
-
-  protected async beforeExecute(input: WriteTestFileInput): Promise<void> {
-    if (!input.tests || input.tests.length === 0) {
-      throw new Error('No tests provided');
-    }
-
-    if (!input.projectRoot) {
-      logger.warn('[WriteTestFileTool] projectRoot not provided, using current directory');
-    }
   }
 
   private generateTestFileContent(tests: TestCase[]): string {

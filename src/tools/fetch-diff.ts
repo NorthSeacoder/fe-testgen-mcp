@@ -11,7 +11,6 @@ import { computeContentHash } from '../utils/fingerprint.js';
 import type { Diff } from '../schemas/diff.js';
 import { isFrontendFile } from '../schemas/diff.js';
 import { logger } from '../utils/logger.js';
-import { extractRevisionId } from '../utils/revision.js';
 
 // Zod schema for FetchDiffInput
 export const FetchDiffInputSchema = z.object({
@@ -120,20 +119,6 @@ export class FetchDiffTool extends BaseTool<FetchDiffInput, FetchDiffOutput> {
       throw new Error(result.error || 'Failed to fetch diff');
     }
     return result.data.diff;
-  }
-
-  protected async beforeExecute(input: FetchDiffInput): Promise<void> {
-    // 规范化 revisionId：智能提取和规范化
-    const normalized = extractRevisionId(input.revisionId);
-    if (normalized && normalized !== input.revisionId) {
-      logger.info(`[FetchDiffTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`);
-      input.revisionId = normalized;
-    }
-
-    // 验证输入
-    if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
-      throw new Error(`Invalid revision ID: ${input.revisionId}. Expected format: D followed by numbers (e.g., D12345)`);
-    }
   }
 
   /**

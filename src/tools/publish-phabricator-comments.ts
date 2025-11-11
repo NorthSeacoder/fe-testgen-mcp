@@ -7,12 +7,20 @@
  * 3. 支持批量发布
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { PhabricatorClient } from '../clients/phabricator.js';
 import { logger } from '../utils/logger.js';
 import type { Issue } from '../schemas/issue.js';
 import { getEnv } from '../config/env.js';
-import { extractRevisionId } from '../utils/revision.js';
+
+// Zod schema for PublishPhabricatorCommentsInput
+export const PublishPhabricatorCommentsInputSchema = z.object({
+  revisionId: z.string().describe('REQUIRED. Phabricator Revision ID (e.g., "D551414" or "D12345"). Extract from user message patterns like "publish comments for D12345" or "发布 D12345 的评论". If user provides only numbers, add "D" prefix.'),
+  issues: z.array(z.any()).describe('代码审查问题列表'),
+  message: z.string().optional().describe('主评论内容（可选，默认自动生成）'),
+  dryRun: z.boolean().optional().describe('预览模式，不实际发布（默认 false）'),
+});
 
 export interface PublishPhabricatorCommentsInput {
   revisionId: string;
@@ -39,6 +47,11 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
 > {
   constructor(private phabricator: PhabricatorClient) {
     super();
+  }
+
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return PublishPhabricatorCommentsInputSchema;
   }
 
   getMetadata(): ToolMetadata {
@@ -88,12 +101,24 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
     const { revisionId, issues, message, dryRun = false } = input;
 
     // 检查安全开关
-    const allowPublish = getEnv().ALLOW_PUBLISH_COMMENTS === 'true';
+    const allowPublishEnv = getEnv().ALLOW_PUBLISH_COMMENTS;
+    const normalizedAllowPublish = allowPublishEnv?.trim().toLowerCase() ?? 'false';
+    const allowPublish = normalizedAllowPublish === 'true' || normalizedAllowPublish === '1';
     const actualDryRun = dryRun || !allowPublish;
+
+    logger.info('[PublishPhabricatorCommentsTool] Publishing configuration', {
+      allowPublishEnv,
+      normalizedAllowPublish,
+      allowPublish,
+      dryRunInput: dryRun,
+      actualDryRun,
+      issuesCount: issues.length,
+    });
 
     if (!allowPublish && !dryRun) {
       logger.warn(
-        '[PublishPhabricatorCommentsTool] ALLOW_PUBLISH_COMMENTS is not enabled, running in dry-run mode'
+        '[PublishPhabricatorCommentsTool] ALLOW_PUBLISH_COMMENTS is not enabled, falling back to dry-run mode',
+        { envValue: allowPublishEnv }
       );
     }
 
@@ -152,6 +177,13 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
       // 实际发布或预览
       if (!actualDryRun && issue.line) {
         try {
+          logger.debug('[PublishPhabricatorCommentsTool] Publishing inline comment', {
+            revisionId,
+            file: issue.file,
+            line: issue.line,
+            severity: issue.severity,
+          });
+          
           await this.phabricator.createInline(
             revisionId,
             issue.file,
@@ -160,18 +192,27 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
             commentContent
           );
           published++;
-          logger.debug('[PublishPhabricatorCommentsTool] Published comment', {
+          logger.info('[PublishPhabricatorCommentsTool] Successfully published comment', {
             file: issue.file,
             line: issue.line,
           });
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorStack = error instanceof Error ? error.stack : undefined;
           logger.error('[PublishPhabricatorCommentsTool] Failed to publish comment', {
             file: issue.file,
             line: issue.line,
-            error,
+            error: errorMessage,
+            stack: errorStack,
           });
           failed++;
         }
+      } else if (!issue.line) {
+        logger.warn('[PublishPhabricatorCommentsTool] Skipping issue without line number', {
+          file: issue.file,
+          message: issue.message.substring(0, 100),
+        });
+        skipped++;
       } else {
         // 预览模式
         logger.info('[PublishPhabricatorCommentsTool] [DRY-RUN] Would publish comment', {
@@ -212,26 +253,6 @@ export class PublishPhabricatorCommentsTool extends BaseTool<
         byTopic,
       },
     };
-  }
-
-  protected async beforeExecute(input: PublishPhabricatorCommentsInput): Promise<void> {
-    // 规范化 revisionId
-    const normalized = extractRevisionId(input.revisionId);
-    if (normalized && normalized !== input.revisionId) {
-      logger.info(
-        `[PublishPhabricatorCommentsTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`
-      );
-      input.revisionId = normalized;
-    }
-
-    // 验证输入
-    if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
-      throw new Error(`Invalid revision ID: ${input.revisionId}`);
-    }
-
-    if (!input.issues || input.issues.length === 0) {
-      throw new Error('No issues provided');
-    }
   }
 
   private formatIssueComment(issue: Issue): string {

@@ -7,6 +7,7 @@
  * 3. 返回测试代码和统计信息
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { parseDiff, generateNumberedDiff } from '../utils/diff-parser.js';
 import { isFrontendFile } from '../schemas/diff.js';
@@ -22,6 +23,26 @@ import { RawDiffSource } from '../core/code-change-source.js';
 import { logger } from '../utils/logger.js';
 import type { TestCase } from '../schemas/test-plan.js';
 import type { FeatureItem, TestScenarioItem } from '../schemas/test-matrix.js';
+
+// Zod schema for GenerateTestsFromRawDiffInput
+export const GenerateTestsFromRawDiffInputSchema = z.object({
+  rawDiff: z.string().describe('Unified diff 格式的原始文本（必需）'),
+  identifier: z.string().describe('唯一标识符，如 MR ID、PR ID、commit hash（必需）'),
+  projectRoot: z.string().describe('项目根目录绝对路径（必需）'),
+  metadata: z.object({
+    title: z.string().optional(),
+    author: z.string().optional(),
+    mergeRequestId: z.string().optional(),
+    commitHash: z.string().optional(),
+    branch: z.string().optional(),
+  }).optional().describe('可选的元数据'),
+  scenarios: z.array(z.enum(['happy-path', 'edge-case', 'error-path', 'state-change'])).optional().describe('手动指定测试场景（可选）'),
+  mode: z.enum(['incremental', 'full']).optional().describe('增量或全量模式（默认 incremental）'),
+  maxTests: z.number().optional().describe('最大测试数量（可选）'),
+  analyzeMatrix: z.boolean().optional().describe('是否先分析测试矩阵（默认 true）'),
+  forceRefresh: z.boolean().optional().describe('强制刷新缓存（默认 false）'),
+  framework: z.enum(['vitest', 'jest']).optional().describe('测试框架（可选，自动检测）'),
+});
 
 export interface GenerateTestsFromRawDiffInput {
   rawDiff: string;
@@ -82,6 +103,11 @@ export class GenerateTestsFromRawDiffTool extends BaseTool<
     const resolvePathTool = new ResolvePathTool();
     const analyzer = new TestMatrixAnalyzer(openai);
     this.baseAnalyzer = new BaseAnalyzeTestMatrix(resolvePathTool, state, analyzer);
+  }
+
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return GenerateTestsFromRawDiffInputSchema;
   }
 
   getMetadata(): ToolMetadata {
@@ -313,24 +339,6 @@ export class GenerateTestsFromRawDiffTool extends BaseTool<
       summary,
       ...(matrixData && { matrix: matrixData }),
     };
-  }
-
-  protected async beforeExecute(input: GenerateTestsFromRawDiffInput): Promise<void> {
-    if (!input.rawDiff || input.rawDiff.trim().length === 0) {
-      throw new Error('rawDiff cannot be empty');
-    }
-
-    if (!input.identifier || input.identifier.trim().length === 0) {
-      throw new Error('identifier cannot be empty');
-    }
-
-    if (!input.projectRoot || input.projectRoot.trim().length === 0) {
-      throw new Error('projectRoot cannot be empty');
-    }
-
-    if (input.maxTests !== undefined && input.maxTests <= 0) {
-      throw new Error(`maxTests must be positive, got: ${input.maxTests}`);
-    }
   }
 
   private generateSummary(tests: TestCase[]): {

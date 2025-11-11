@@ -7,6 +7,7 @@
  * 3. 返回功能清单和测试场景
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { BaseAnalyzeTestMatrix } from './base-analyze-test-matrix.js';
 import { ResolvePathTool } from './resolve-path.js';
@@ -17,6 +18,21 @@ import { parseDiff, generateNumberedDiff } from '../utils/diff-parser.js';
 import { isFrontendFile } from '../schemas/diff.js';
 import { logger } from '../utils/logger.js';
 import type { FeatureItem, TestScenarioItem } from '../schemas/test-matrix.js';
+
+// Zod schema for AnalyzeRawDiffTestMatrixInput
+export const AnalyzeRawDiffTestMatrixInputSchema = z.object({
+  rawDiff: z.string().describe('Unified diff 格式的原始文本（必需）'),
+  identifier: z.string().describe('唯一标识符，如 MR ID、PR ID、commit hash（必需）'),
+  projectRoot: z.string().describe('项目根目录绝对路径（必需）'),
+  metadata: z.object({
+    title: z.string().optional(),
+    author: z.string().optional(),
+    mergeRequestId: z.string().optional(),
+    commitHash: z.string().optional(),
+    branch: z.string().optional(),
+  }).optional().describe('可选的元数据'),
+  forceRefresh: z.boolean().optional().describe('强制刷新缓存（默认 false）'),
+});
 
 export interface AnalyzeRawDiffTestMatrixInput {
   rawDiff: string; // Unified diff 格式的原始文本
@@ -58,6 +74,11 @@ export class AnalyzeRawDiffTestMatrixTool extends BaseTool<
     const resolvePathTool = new ResolvePathTool();
     const analyzer = new TestMatrixAnalyzer(openai);
     this.baseAnalyzer = new BaseAnalyzeTestMatrix(resolvePathTool, state, analyzer);
+  }
+
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return AnalyzeRawDiffTestMatrixInputSchema;
   }
 
   getMetadata(): ToolMetadata {
@@ -196,20 +217,6 @@ export class AnalyzeRawDiffTestMatrixTool extends BaseTool<
       projectRoot,
       statistics,
     };
-  }
-
-  protected async beforeExecute(input: AnalyzeRawDiffTestMatrixInput): Promise<void> {
-    if (!input.rawDiff || input.rawDiff.trim().length === 0) {
-      throw new Error('rawDiff cannot be empty');
-    }
-
-    if (!input.identifier || input.identifier.trim().length === 0) {
-      throw new Error('identifier cannot be empty');
-    }
-
-    if (!input.projectRoot || input.projectRoot.trim().length === 0) {
-      throw new Error('projectRoot cannot be empty');
-    }
   }
 
   private generateStatistics(

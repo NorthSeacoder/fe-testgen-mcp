@@ -7,12 +7,23 @@
  * 3. 返回结构化的测试报告
  */
 
+import { z } from 'zod';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
+
+// Zod schema for RunTestsInput
+export const RunTestsInputSchema = z.object({
+  testFiles: z.array(z.string()).optional().describe('要运行的测试文件路径（相对于 projectRoot）'),
+  projectRoot: z.string().optional().describe('项目根目录绝对路径（默认当前目录）'),
+  framework: z.enum(['vitest', 'jest']).optional().describe('测试框架（可选，自动检测）'),
+  watch: z.boolean().optional().describe('监听模式（默认 false）'),
+  coverage: z.boolean().optional().describe('生成覆盖率报告（默认 false）'),
+  timeout: z.number().optional().describe('超时时间（毫秒，默认 30000）'),
+});
 
 export interface RunTestsInput {
   testFiles?: string[]; // 要运行的测试文件（可选，默认运行所有测试）
@@ -39,6 +50,11 @@ export interface RunTestsOutput {
 }
 
 export class RunTestsTool extends BaseTool<RunTestsInput, RunTestsOutput> {
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return RunTestsInputSchema;
+  }
+
   getMetadata(): ToolMetadata {
     return {
       name: 'run-tests',
@@ -167,12 +183,6 @@ export class RunTestsTool extends BaseTool<RunTestsInput, RunTestsOutput> {
       stderr,
       exitCode,
     };
-  }
-
-  protected async beforeExecute(input: RunTestsInput): Promise<void> {
-    if (input.watch) {
-      logger.warn('[RunTestsTool] Watch mode is enabled, this may not return automatically');
-    }
   }
 
   private async detectFramework(projectRoot: string): Promise<'vitest' | 'jest'> {

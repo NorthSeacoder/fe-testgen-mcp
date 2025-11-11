@@ -17,21 +17,43 @@ import { FetchDiffTool } from './fetch-diff.js';
 import { OpenAIClient } from '../clients/openai.js';
 import { StateManager } from '../state/manager.js';
 import { logger } from '../utils/logger.js';
+import { parseDiff, generateNumberedDiff } from '../utils/diff-parser.js';
+import { isFrontendFile } from '../schemas/diff.js';
 import type { FeatureItem, TestScenarioItem } from '../schemas/test-matrix.js';
-import { extractRevisionId } from '../utils/revision.js';
 
 // Zod schema for AnalyzeTestMatrixInput
 export const AnalyzeTestMatrixInputSchema = z.object({
-  revisionId: z.string().describe('REQUIRED. Phabricator Revision ID (e.g., "D538642" or "538642"). Extract from user message patterns like: "analyze D12345", "分析 diff D538642", "看下 12345 的测试". If user provides only numbers, add "D" prefix.'),
+  revisionId: z.string().optional().describe('Phabricator Revision ID (e.g., "D538642" or "538642"). Required if rawDiff is not provided.'),
+  rawDiff: z.string().optional().describe('Unified diff 格式的原始文本（如果不从 Phabricator 获取）。Required if revisionId is not provided.'),
+  identifier: z.string().optional().describe('唯一标识符（用于 rawDiff 模式，如 MR ID、PR ID）'),
   diff: z.any().optional().describe('可选的 diff 对象（如果已通过 fetch-diff 获取）。如果提供此参数，将跳过重新获取 diff 的步骤。'),
   projectRoot: z.string().optional().describe('项目根目录绝对路径（强烈推荐提供，用于检测测试框架和解析文件路径）'),
+  metadata: z.object({
+    title: z.string().optional(),
+    author: z.string().optional(),
+    mergeRequestId: z.string().optional(),
+    commitHash: z.string().optional(),
+    branch: z.string().optional(),
+  }).optional().describe('可选的元数据（用于 rawDiff 模式）'),
   forceRefresh: z.boolean().optional().describe('强制刷新缓存（默认 false）'),
-});
+}).refine(
+  (data) => data.revisionId || data.rawDiff || data.diff,
+  { message: 'Must provide either revisionId, rawDiff, or diff' }
+);
 
 export interface AnalyzeTestMatrixInput {
-  revisionId: string;
-  diff?: any; // 可选的 diff 对象（如果已通过 fetch-diff 获取）
-  projectRoot?: string; // 项目根目录绝对路径（强烈推荐提供）
+  revisionId?: string;
+  rawDiff?: string;
+  identifier?: string;
+  diff?: any;
+  projectRoot?: string;
+  metadata?: {
+    title?: string;
+    author?: string;
+    mergeRequestId?: string;
+    commitHash?: string;
+    branch?: string;
+  };
   forceRefresh?: boolean;
 }
 
@@ -119,29 +141,57 @@ export class AnalyzeTestMatrixTool extends BaseTool<AnalyzeTestMatrixInput, Anal
   }
 
   protected async executeImpl(input: AnalyzeTestMatrixInput): Promise<AnalyzeTestMatrixOutput> {
-    const { revisionId, diff: providedDiff, projectRoot, forceRefresh = false } = input;
+    const { revisionId, rawDiff, identifier, diff: providedDiff, projectRoot, metadata, forceRefresh = false } = input;
 
-    // 1. 获取 diff（如果没有提供）
+    // Determine the identifier to use
+    const effectiveId = revisionId || identifier || 'unknown';
+
+    // 1. 获取或解析 diff
     let diff;
     if (providedDiff) {
-      logger.info(`[AnalyzeTestMatrixTool] Using provided diff for ${revisionId}`);
+      logger.info(`[AnalyzeTestMatrixTool] Using provided diff for ${effectiveId}`);
       diff = this.fetchDiffTool.filterFrontendFiles(providedDiff);
-    } else {
+    } else if (rawDiff) {
+      logger.info(`[AnalyzeTestMatrixTool] Parsing raw diff for ${effectiveId}...`);
+      const parsedDiff = parseDiff(rawDiff, effectiveId, {
+        diffId: metadata?.commitHash || identifier,
+        title: metadata?.title,
+        summary: metadata?.mergeRequestId || metadata?.commitHash,
+        author: metadata?.author,
+      });
+      parsedDiff.numberedRaw = generateNumberedDiff(parsedDiff);
+      parsedDiff.metadata = metadata ? { ...metadata } : {};
+      
+      // Filter frontend files
+      const frontendFiles = parsedDiff.files.filter((f) => isFrontendFile(f.path));
+      parsedDiff.files = frontendFiles;
+      diff = parsedDiff;
+    } else if (revisionId) {
       logger.info(`[AnalyzeTestMatrixTool] Fetching diff for ${revisionId}...`);
       const diffResult = await this.fetchDiffTool.fetch({ revisionId, forceRefresh });
       diff = this.fetchDiffTool.filterFrontendFiles(diffResult);
+    } else {
+      throw new Error('Must provide either revisionId, rawDiff, or diff');
     }
 
     if (diff.files.length === 0) {
-      throw new Error(`No frontend files found in revision ${revisionId}`);
+      throw new Error(`No frontend files found in ${effectiveId}`);
     }
 
     // 2. 使用 BaseAnalyzeTestMatrix 执行分析
     logger.info(`[AnalyzeTestMatrixTool] Analyzing test matrix...`);
     const analysisResult = await this.baseAnalyzer.analyze({
       diff,
-      revisionId,
+      revisionId: effectiveId,
       projectRoot,
+      metadata: metadata ? {
+        commitInfo: metadata.commitHash ? {
+          hash: metadata.commitHash,
+          author: metadata.author || 'unknown',
+          date: new Date().toISOString(),
+          message: metadata.title || '',
+        } : undefined,
+      } : undefined,
     });
 
     // 3. 转换为工具输出格式
@@ -151,43 +201,20 @@ export class AnalyzeTestMatrixTool extends BaseTool<AnalyzeTestMatrixInput, Anal
     );
 
     logger.info(`[AnalyzeTestMatrixTool] Analysis completed`, {
+      identifier: effectiveId,
       totalFeatures: analysisResult.matrix.features.length,
       totalScenarios: analysisResult.matrix.scenarios.length,
       estimatedTests: statistics.estimatedTests,
     });
 
     return {
-      revisionId,
+      revisionId: effectiveId,
       features: analysisResult.matrix.features,
       scenarios: analysisResult.matrix.scenarios,
       framework: analysisResult.metadata.framework || 'vitest',
       projectRoot: projectRoot || process.cwd(),
       statistics,
     };
-  }
-
-  protected async beforeExecute(input: AnalyzeTestMatrixInput): Promise<void> {
-    // 规范化 revisionId
-    const normalized = extractRevisionId(input.revisionId);
-    if (normalized && normalized !== input.revisionId) {
-      logger.info(
-        `[AnalyzeTestMatrixTool] Auto-normalized revision ID from "${input.revisionId}" to "${normalized}"`
-      );
-      input.revisionId = normalized;
-    }
-
-    // 验证输入
-    if (!input.revisionId || !input.revisionId.match(/^D\d+$/i)) {
-      throw new Error(`Invalid revision ID: ${input.revisionId}`);
-    }
-
-    if (input.projectRoot) {
-      logger.info('[AnalyzeTestMatrixTool] Using provided projectRoot:', input.projectRoot);
-    } else {
-      logger.warn(
-        '[AnalyzeTestMatrixTool] projectRoot not provided, will attempt auto-detection (may be inaccurate)'
-      );
-    }
   }
 
   private generateStatistics(

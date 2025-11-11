@@ -2,11 +2,18 @@
  * FetchCommitChangesTool - 获取 Git commit 变更内容
  */
 
+import { z } from 'zod';
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { BaseTool, ToolMetadata } from '../core/base-tool.js';
 import { parseDiff, generateNumberedDiff } from '../utils/diff-parser.js';
 import type { Diff } from '../schemas/diff.js';
+
+// Zod schema for FetchCommitChangesInput
+export const FetchCommitChangesInputSchema = z.object({
+  commitHash: z.string().describe('Git commit hash（支持短 hash）'),
+  repoPath: z.string().optional().describe('本地仓库路径，默认为当前工作目录'),
+});
 
 export interface FetchCommitChangesInput {
   commitHash: string;
@@ -24,6 +31,11 @@ export interface FetchCommitChangesOutput {
 }
 
 export class FetchCommitChangesTool extends BaseTool<FetchCommitChangesInput, FetchCommitChangesOutput> {
+  // Expose Zod schema for FastMCP
+  getZodSchema() {
+    return FetchCommitChangesInputSchema;
+  }
+
   getMetadata(): ToolMetadata {
     return {
       name: 'fetch-commit-changes',
@@ -46,12 +58,6 @@ export class FetchCommitChangesTool extends BaseTool<FetchCommitChangesInput, Fe
       category: 'code-retrieval',
       version: '3.0.0',
     };
-  }
-
-  protected async beforeExecute(input: FetchCommitChangesInput): Promise<void> {
-    if (!input.commitHash || input.commitHash.trim().length === 0) {
-      throw new Error('commitHash is required');
-    }
   }
 
   protected async executeImpl(input: FetchCommitChangesInput): Promise<FetchCommitChangesOutput> {
