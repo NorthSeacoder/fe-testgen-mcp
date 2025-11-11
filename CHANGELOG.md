@@ -91,10 +91,10 @@
 
 ### 📝 文档
 
-- **新增**: `UPDATE_SUMMARY.md` - v3.0 更新总结
-- **新增**: `MIGRATION_V3.md` - 详细迁移指南
 - **更新**: `README.md` - 反映新架构
 - **更新**: `TRACKING_GUIDE.md` - 监控配置说明
+
+> 说明：原 `UPDATE_SUMMARY.md`、`MIGRATION_V3.md` 等迁移文档已整合进 README，保持文档精简。
 
 ### ⚠️ 破坏性变更
 
@@ -102,10 +102,6 @@
 2. **启动命令**: 移除 `npm run start:fastmcp`，统一为 `npm start`
 3. **监控方式**: 从被动拉取（Prometheus）改为主动推送（远程 API）
 4. **依赖变更**: 移除多个依赖，新增 fastmcp
-
-### 🔄 迁移指南
-
-详见 [MIGRATION_V3.md](./MIGRATION_V3.md)
 
 ---
 

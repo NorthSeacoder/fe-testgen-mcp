@@ -80,22 +80,29 @@ ${fileList}
       }
 
       return parsed.map((item: any) => {
-        // ✅ 验证并修正文件路径
         const filePath = this.correctFilePath(item.file || '', files);
         if (!filePath) {
+          return null;
+        }
+
+        const codeSnippet = item.codeSnippet;
+        const line = item.line;
+
+        if (!codeSnippet && !line) {
+          logger.warn('[I18nAgent] Issue missing both codeSnippet and line', { item });
           return null;
         }
 
         const issue: Issue = {
           id: generateIssueFingerprint(
             filePath,
-            (item.codeSnippet || item.code_snippet) || [item.line || 0, item.line || 0],
+            codeSnippet || [line || 0, line || 0],
             'i18n',
             item.message || ''
           ),
           file: filePath,
-          line: item.line,
-          codeSnippet: item.codeSnippet || item.code_snippet,
+          line,
+          codeSnippet,
           severity: item.severity || 'medium',
           topic: CRTopic.parse('i18n'),
           message: item.message || '',

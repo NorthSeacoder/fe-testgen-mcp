@@ -94,19 +94,16 @@ ${fileList}
       }
 
       return parsed.map((item: any) => {
-        // ✅ 验证并修正文件路径
         const filePath = this.correctFilePath(item.file || '', files);
         if (!filePath) {
           return null;
         }
 
-        // 优先使用 codeSnippet，向后兼容 line
-        const codeSnippet = item.codeSnippet || item.code_snippet;
+        const codeSnippet = item.codeSnippet;
         const line = item.line;
         
-        // 如果既没有 codeSnippet 也没有 line，跳过
         if (!codeSnippet && !line) {
-          logger.warn('Issue missing both codeSnippet and line', { item });
+          logger.warn('[ReactAgent] Issue missing both codeSnippet and line', { item });
           return null;
         }
 

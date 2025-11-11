@@ -97,32 +97,29 @@ ${fileList}
       }
 
       return parsed.map((item: any) => {
-        // ✅ 验证并修正文件路径（特别重要，处理 .css vs .less 的问题）
         const filePath = this.correctFilePath(item.file || '', files);
         if (!filePath) {
           return null;
         }
 
-        // 🐛 调试：记录 CSS/Less 文件的行号信息
-        if (filePath.endsWith('.css') || filePath.endsWith('.less') || filePath.endsWith('.scss')) {
-          logger.debug('CSSAgent reported issue', {
-            file: filePath,
-            reportedLine: item.line,
-            message: item.message?.substring(0, 50),
-            confidence: item.confidence,
-          });
+        const codeSnippet = item.codeSnippet;
+        const line = item.line;
+
+        if (!codeSnippet && !line) {
+          logger.warn('[CSSAgent] Issue missing both codeSnippet and line', { item });
+          return null;
         }
 
         const issue: Issue = {
           id: generateIssueFingerprint(
             filePath,
-            (item.codeSnippet || item.code_snippet) || [item.line || 0, item.line || 0],
+            codeSnippet || [line || 0, line || 0],
             'css',
             item.message || ''
           ),
           file: filePath,
-          line: item.line,
-          codeSnippet: item.codeSnippet || item.code_snippet,
+          line,
+          codeSnippet,
           severity: item.severity || 'medium',
           topic: CRTopic.parse('css'),
           message: item.message || '',

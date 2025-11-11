@@ -10,8 +10,9 @@ Frontend Phabricator Diff Review and Unit Test Generation MCP Server
 - ✅ 多维度代码审查 (React/TypeScript/性能/安全/可访问性/CSS/国际化)
 - ✅ 自动识别审查主题
 - ✅ 多 Agent 并行执行
-- ✅ 增量去重,避免重复评论
-- ✅ 智能合并同行评论
+- ✅ 智能去重：综合相似度计算（message + suggestion），相似度 > 85% 认为重复
+- ✅ 自动识别删除行，评论发布到旧文件处
+- ✅ 代码片段智能定位，无需手动指定行号
 - ✅ 自动发布到 Phabricator
 
 > ⚠️ **注意**：代码审查工具仅支持 Phabricator Diff（需要通过 `fetch-diff` 获取 diffId，确保行号准确）。
