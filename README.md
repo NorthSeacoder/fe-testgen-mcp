@@ -22,7 +22,7 @@ Frontend Phabricator Diff Review and Unit Test Generation MCP Server
 - ✅ 支持 Vitest/Jest
 - ✅ Embedding 增强的测试生成
 - ✅ 参考现有测试风格
-- ✅ 支持 n8n + GitLab/GitHub 集成（接受外部 raw diff） -> [快速指南](./N8N_INTEGRATION.md)
+- ✅ 支持 n8n + GitLab/GitHub 集成（接受外部 raw diff） -> [快速指南](./N8N_INTEGRATION.md) ｜ [测试流程示例](./N8N_TEST_WORKFLOW_GUIDE.md)
 
 ### 项目支持
 - ✅ 自动检测项目根目录

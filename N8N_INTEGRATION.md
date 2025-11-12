@@ -24,6 +24,8 @@ n8n 是一个开源的工作流自动化工具，支持通过节点组合实现�
 
 这两个工具接受外部传入的 raw diff 文本，无需依赖 Phabricator，适合与 GitLab、GitHub 等平台集成。
 
+> 💡 如需了解“生成测试 → 写入 Git → 调用 `run-tests` 验证”的完整工作流，请参考 [n8n 测试工具完整调用指南](./N8N_TEST_WORKFLOW_GUIDE.md)。
+
 ---
 
 ## 前置条件
