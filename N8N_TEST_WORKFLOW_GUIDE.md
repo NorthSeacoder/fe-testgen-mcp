@@ -116,20 +116,49 @@ fe-testgen-mcp 提供了三个核心测试工具：
 
 **节点类型**: `Code`
 
+> **为什么需要这个步骤？**  
+> 不同平台返回的 diff 格式略有差异：
+> - **GitLab API** 的 `changes[].diff` 通常只包含 `@@ ... @@` 块，缺少 `diff --git` 头部
+> - **Phabricator / 原始 git diff** 通常是完整的 unified diff 格式
+> 
+> 本步骤会自动检测并统一格式，确保 MCP 工具能正确解析。
+
 **JavaScript 代码**:
 ```javascript
-// 将 GitLab changes 转换为 unified diff 格式
+// 将不同来源的 diff 统一为标准 unified diff 格式
+// 支持：GitLab API changes[].diff、git diff 原始输出、Phabricator diff
 const changes = $input.item.json.changes || [];
+const diffSegments = [];
 
-// 合并所有文件的 diff
-let rawDiff = '';
 for (const change of changes) {
-  // 添加文件头信息
-  rawDiff += `diff --git a/${change.old_path} b/${change.new_path}\n`;
-  rawDiff += `--- a/${change.old_path}\n`;
-  rawDiff += `+++ b/${change.new_path}\n`;
-  rawDiff += change.diff + '\n';
+  const originalDiff = (change.diff || '').trim();
+
+  if (!originalDiff) {
+    continue;
+  }
+
+  // 如果已经包含 diff --git 头部，说明是完整的 unified diff，直接使用
+  if (/^diff --git\b/m.test(originalDiff)) {
+    diffSegments.push(originalDiff.endsWith('\n') ? originalDiff : `${originalDiff}\n`);
+    continue;
+  }
+
+  // GitLab API 返回的 diff 只有 @@ 块，需要补齐文件头
+  const header = [
+    `diff --git a/${change.old_path} b/${change.new_path}`,
+    `--- a/${change.old_path}`,
+    `+++ b/${change.new_path}`,
+  ];
+
+  // 如果 diff 内容已经包含 ---/+++ 头部，删除一次以避免重复
+  const body = originalDiff.startsWith('--- ')
+    ? originalDiff.replace(/^---[^\n]*\n\+\+\+[^\n]*\n/, '')
+    : originalDiff;
+
+  diffSegments.push([...header, body].join('\n').trimEnd() + '\n');
 }
+
+const rawDiff = diffSegments.join('\n');
 
 // 从 webhook 数据中提取元信息
 const mrInfo = $('Webhook').item.json.object_attributes;
@@ -149,6 +178,8 @@ return {
   }
 };
 ```
+
+> 🔍 调试提示：可以暂时在代码中加入 `console.log(originalDiff.slice(0, 200))`，先确认上游返回的 diff 是否已经包含 `diff --git` 头部，再决定是否需要转换。
 
 ---
 
