@@ -18,10 +18,6 @@ export const configSchema = z.object({
     model: z.string().default('text-embedding-3-small'),
     enabled: z.boolean().default(true),
   }),
-  phabricator: z.object({
-    host: z.string().url(),
-    token: z.string(),
-  }),
   cache: z.object({
     dir: z.string().default('.cache'),
     ttl: z.number().default(86400),

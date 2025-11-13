@@ -13,15 +13,11 @@ const envSchema = z.object({
   EMBEDDING_BASE_URL: z.string().url().optional(),
   EMBEDDING_MODEL: z.string().optional().default('text-embedding-3-small'),
   
-  PHABRICATOR_HOST: z.string().url('PHABRICATOR_HOST must be a valid URL'),
-  PHABRICATOR_TOKEN: z.string().min(1, 'PHABRICATOR_TOKEN is required'),
-  
   // 可选配置
   MODEL_TEMPERATURE: z.string().optional().default('0'),
   MODEL_TOP_P: z.string().optional().default('1'),
   CACHE_DIR: z.string().optional().default('.cache'),
   STATE_DIR: z.string().optional().default('.state'),
-  ALLOW_PUBLISH_COMMENTS: z.string().optional().default('false'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -162,13 +158,10 @@ export function getEnv(): Env {
       OPENAI_MODEL: process.env.OPENAI_MODEL,
       EMBEDDING_BASE_URL: process.env.EMBEDDING_BASE_URL,
       EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
-      PHABRICATOR_HOST: process.env.PHABRICATOR_HOST,
-      PHABRICATOR_TOKEN: process.env.PHABRICATOR_TOKEN,
       MODEL_TEMPERATURE: process.env.MODEL_TEMPERATURE,
       MODEL_TOP_P: process.env.MODEL_TOP_P,
       CACHE_DIR: process.env.CACHE_DIR,
       STATE_DIR: process.env.STATE_DIR,
-      ALLOW_PUBLISH_COMMENTS: process.env.ALLOW_PUBLISH_COMMENTS,
     });
 
     return env;

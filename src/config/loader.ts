@@ -51,14 +51,6 @@ export function loadConfig(configPath?: string): Config {
     resolved.embedding = (resolved.embedding || {}) as Record<string, unknown>;
     (resolved.embedding as Record<string, unknown>).model = env.EMBEDDING_MODEL;
   }
-  if (!(resolved.phabricator as Record<string, unknown>)?.host && env.PHABRICATOR_HOST) {
-    resolved.phabricator = (resolved.phabricator || {}) as Record<string, unknown>;
-    (resolved.phabricator as Record<string, unknown>).host = env.PHABRICATOR_HOST;
-  }
-  if (!(resolved.phabricator as Record<string, unknown>)?.token && env.PHABRICATOR_TOKEN) {
-    resolved.phabricator = (resolved.phabricator || {}) as Record<string, unknown>;
-    (resolved.phabricator as Record<string, unknown>).token = env.PHABRICATOR_TOKEN;
-  }
   if (!resolved.projectRoot && env.PROJECT_ROOT) {
     resolved.projectRoot = env.PROJECT_ROOT;
   }

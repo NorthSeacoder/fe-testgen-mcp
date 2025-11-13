@@ -11,15 +11,12 @@ import { ContextStore, Memory } from './core/context.js';
 import { setAppContext } from './core/app-context.js';
 import { initializeMetrics, getMetrics } from './utils/metrics.js';
 import { OpenAIClient } from './clients/openai.js';
-import { PhabricatorClient } from './clients/phabricator.js';
 import { EmbeddingClient } from './clients/embedding.js';
 import { Cache } from './cache/cache.js';
 import { StateManager } from './state/manager.js';
-import { FetchDiffTool } from './tools/fetch-diff.js';
 import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
 import { AnalyzeTestMatrixTool } from './tools/analyze-test-matrix.js';
 import { GenerateTestsTool } from './tools/generate-tests.js';
-import { PublishPhabricatorCommentsTool } from './tools/publish-phabricator-comments.js';
 import { WriteTestFileTool } from './tools/write-test-file.js';
 import { RunTestsTool } from './tools/run-tests.js';
 import { AnalyzeRawDiffTestMatrixTool } from './tools/analyze-raw-diff-test-matrix.js';
@@ -79,11 +76,6 @@ function initialize() {
     maxTokens: config.llm.maxTokens,
   });
 
-  const phabricator = new PhabricatorClient({
-    host: config.phabricator.host,
-    token: config.phabricator.token,
-  });
-
   const embedding = new EmbeddingClient({
     apiKey: config.llm.apiKey,
     baseURL: config.embedding.baseURL || config.llm.baseURL,
@@ -99,7 +91,6 @@ function initialize() {
   setAppContext({
     openai,
     embedding,
-    phabricator,
     cache,
     state,
     contextStore,
@@ -110,19 +101,15 @@ function initialize() {
   // 注册所有工具
   toolRegistry = new ToolRegistry();
   
-  const fetchDiffTool = new FetchDiffTool(phabricator, cache);
-  
   // 1. 核心数据获取工具
-  toolRegistry.register(fetchDiffTool);
   toolRegistry.register(new FetchCommitChangesTool());
 
   // 2. Agent 封装工具
-  toolRegistry.register(new AnalyzeTestMatrixTool(openai, state, fetchDiffTool));
+  toolRegistry.register(new AnalyzeTestMatrixTool(openai, state));
   toolRegistry.register(
-    new GenerateTestsTool(openai, embedding, state, contextStore, fetchDiffTool)
+    new GenerateTestsTool(openai, embedding, state, contextStore)
   );
 
-  toolRegistry.register(new PublishPhabricatorCommentsTool(phabricator, embedding));
   toolRegistry.register(new WriteTestFileTool());
   toolRegistry.register(new RunTestsTool());
   toolRegistry.register(new AnalyzeRawDiffTestMatrixTool(openai, state));

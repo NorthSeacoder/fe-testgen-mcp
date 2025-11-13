@@ -1,8 +1,8 @@
 # fe-testgen-mcp
 
-Frontend Phabricator Diff Test Analysis and Unit Test Generation MCP Server
+Frontend Test Generation MCP Server
 
-基于 MCP 协议的前端单元测试生成工具,支持从 Phabricator 获取 Diff 并进行智能分析。
+基于 MCP 协议的前端单元测试生成工具，支持从客户端或工作流中获取代码变更并进行智能测试生成。
 
 ## 功能特性
 
