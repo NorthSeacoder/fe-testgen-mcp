@@ -12,7 +12,7 @@ Frontend Test Generation MCP Server
 - ✅ 支持 Vitest/Jest
 - ✅ Embedding 增强的测试生成
 - ✅ 参考现有测试风格
-- ✅ 支持 n8n + GitLab/GitHub 集成（接受外部 raw diff） -> [快速指南](./N8N_INTEGRATION.md)
+- ✅ 支持 n8n + GitLab/GitHub 集成（接受外部 raw diff，详见下文“外部 diff 工具”小节）
 
 ### 项目支持
 - ✅ 自动检测项目根目录
@@ -27,7 +27,7 @@ Frontend Test Generation MCP Server
 - 🗂️ **ToolRegistry**：集中管理所有工具，支持惰性加载和动态注册
 - 🧱 **Pipeline DSL**：声明式工作流编排（支持并行执行、循环、分支）
 - 🧠 **Context & Memory**：短期上下文与长期记忆管理
-- 🔌 **CodeChangeSource**：统一 Phabricator / Git / Raw diff 接入
+- 🔌 **CodeChangeSource**：统一 Git / Raw diff / 工作流输入
 - 💉 **AppContext**：轻量级依赖注入容器
 - 📤 **监控数据上报**：自动上报工具调用、服务器事件、错误等到远程监控服务
 - ⚡ **性能优化**：惰性加载、并行执行、LLM 批处理、分层缓存
@@ -50,10 +50,6 @@ npm run build
 ```bash
 # OpenAI API Key（必需）
 OPENAI_API_KEY=sk-xxx
-
-# Phabricator 配置（必需）
-PHABRICATOR_HOST=https://phabricator.example.com
-PHABRICATOR_TOKEN=api-xxx
 ```
 
 #### 可选变量
@@ -74,9 +70,6 @@ MODEL_TOP_P=1          # 默认值，范围 0-1
 # 缓存和状态
 CACHE_DIR=.cache       # 默认值
 STATE_DIR=.state       # 默认值
-
-# 安全开关
-ALLOW_PUBLISH_COMMENTS=false  # 默认值，设为 true 允许发布评论
 
 # HTTP 传输模式配置（可选，默认在交互式终端使用 HTTP 模式）
 TRANSPORT_MODE=stdio        # 设置为 stdio 强制使用标准输入输出模式
@@ -117,13 +110,6 @@ embedding:
   enabled: true
   model: text-embedding-3-small
 
-orchestrator:
-  parallelAgents: true
-  maxConcurrency: 3
-
-filter:
-  minConfidence: 0.7
-  
 cache:
   ttl: 3600000  # 1小时
 
@@ -221,7 +207,7 @@ EOF
 
 ## 使用
 
-- 👉 **快速集成 n8n/GitLab/GitHub 工作流**：详见 [N8N_INTEGRATION.md](./N8N_INTEGRATION.md)
+- 👉 **n8n/GitLab/GitHub 工作流示例**：见下方“外部 diff 工具”章节中的推荐流程
 
 ### 运行模式
 
@@ -340,8 +326,7 @@ tracking:
 - 📊 Metrics 指标
 - ❌ 错误事件
 
-> **注意**：监控上报默认关闭。只有设置 `TRACKING_ENABLED=true` 或在 config.yaml 中配置 `enabled: true` 时才会启用。
-> 详细配置和使用请参阅 [TRACKING_GUIDE.md](./TRACKING_GUIDE.md)
+> **注意**：监控上报默认关闭。只有设置 `TRACKING_ENABLED=true` 或在 config.yaml 中配置 `enabled: true` 时才会启用；其余配置示例已在本节列出。
 
 ### 作为 MCP Server
 
@@ -360,9 +345,7 @@ tracking:
       "env": {
         "OPENAI_API_KEY": "sk-xxx",
         "OPENAI_BASE_URL": "https://api.openai.com/v1",
-        "OPENAI_MODEL": "gpt-4",
-        "PHABRICATOR_HOST": "https://phabricator.example.com",
-        "PHABRICATOR_TOKEN": "api-xxx"
+        "OPENAI_MODEL": "gpt-4"
       }
     }
   }
@@ -380,9 +363,7 @@ tracking:
       "command": "node",
       "args": ["/path/to/fe-testgen-mcp/dist/index.js"],
       "env": {
-        "OPENAI_API_KEY": "sk-xxx",
-        "PHABRICATOR_HOST": "https://phabricator.example.com",
-        "PHABRICATOR_TOKEN": "api-xxx"
+        "OPENAI_API_KEY": "sk-xxx"
       }
     }
   }
@@ -397,384 +378,142 @@ tracking:
 
 > ✅ **已实现核心功能**:
 > - **AgentCoordinator**: 多 Agent 协作框架，支持并行执行、优先级调度、自动重试
-> - **ReviewAgent**: 7 个维度的代码审查（React、TypeScript、性能、安全、可访问性、CSS、国际化）
 > - **TestAgent**: 完整的测试生成流程（矩阵分析 + 4 种场景并行生成）
 > - **性能优化**: OpenAI 响应缓存、p-limit 并发控制、自动去重
 
 > 📋 **工具状态**:
-> - ✅ **fetch-diff** - 已实现
-> - ✅ **fetch-commit-changes** - 已实现  
-> - ✅ **analyze-test-matrix** - 封装 TestMatrixAnalyzer 的测试矩阵分析工具
-> - ✅ **generate-tests** - 封装 TestAgent 的测试生成工具
-> - ✅ **publish-phabricator-comments** - 发布审查评论到 Phabricator
-> - ✅ **write-test-file** - 将生成的测试代码写入磁盘
-> - ✅ **run-tests** - 执行测试命令并解析结果
-> - ✅ **analyze-raw-diff-test-matrix** - n8n/GitLab 集成的测试矩阵分析工具
-> - ✅ **generate-tests-from-raw-diff** - n8n/GitLab 集成的一体化单元测试生成工具
-> - ✅ **n8n 集成指南** - 详见 [N8N_INTEGRATION.md](./N8N_INTEGRATION.md)
-> - 🚧 **其他工具** - 待实现（更多 n8n 集成、测试增强等）
+> - ✅ **fetch-commit-changes** – Git commit → diff
+> - ✅ **analyze-test-matrix** – diff → 功能与测试矩阵
+> - ✅ **generate-tests** – 矩阵 → 测试代码
+> - ✅ **write-test-file** – 将测试代码写入磁盘
+> - ✅ **run-tests** – 执行 Vitest/Jest 并解析结果
+> - ✅ **analyze-raw-diff-test-matrix** – raw diff → 测试矩阵
+> - ✅ **generate-tests-from-raw-diff** – raw diff → 测试代码
 
-#### 1. fetch-diff
+#### 1. fetch-commit-changes
 
-**功能：** 从 Phabricator 获取完整的 Diff 内容，包括所有文件变更、hunks 和统计信息。
+**功能：** 读取本地 Git 仓库指定 commit 的 diff，自动过滤前端文件并生成带 `NEW_LINE_xxx` 行号的 `numberedRaw`。
 
-**参数：**
 ```typescript
 {
-  revisionId: string      // Revision ID（如 D123456）
-  forceRefresh?: boolean  // 强制刷新缓存（默认 false）
+  commitHash: string;   // 支持短 hash
+  repoPath?: string;    // 默认当前工作目录
 }
 ```
 
-**返回：**
-- Revision 标题和描述
-- 文件路径列表
-- 变更类型（新增/修改/删除）
-- 增删行数统计
-- 每个文件的 hunks（具体变更内容）
-- 完整的 diff 文本（unified diff 格式）
+**输出亮点：** commit 基本信息、仅包含前端文件的 diff、`numberedRaw` 便于直接送入 LLM 或测试矩阵分析。
 
-**使用场景：**
-- 在执行其他操作前先查看 diff 内容
-- 了解变更的具体细节
-- 仅需查看 diff，不执行审查或测试生成
+#### 2. analyze-test-matrix
 
-**注意：** 此工具返回的信息已包含所有变更细节，无需使用 `git show` 等命令。
+**功能：** 基于 diff 分析功能清单与测试矩阵，是测试生成的第一步。
 
----
-
-#### 2. fetch-commit-changes
-
-**功能：** 从本地 Git 仓库获取指定 commit 的变更内容。
-
-**参数：**
 ```typescript
 {
-  commitHash: string  // Git commit hash（支持短 hash）
-  repoPath?: string   // 本地仓库路径（默认当前工作目录）
+  rawDiff: string;
+  identifier?: string;
+  projectRoot?: string;
+  metadata?: {
+    title?: string;
+    author?: string;
+    mergeRequestId?: string;
+    commitHash?: string;
+    branch?: string;
+  };
 }
 ```
 
-**返回：**
-- commit 信息（hash、作者、提交时间、标题）
-- 变更文件列表（仅保留前端文件）
-- 每个文件的 hunks（NEW_LINE_xxx 标记新行）
-- 完整的 diff 文本
+**输出：** `features`、`scenarios`、`statistics`、检测到的测试框架以及最终的 `projectRoot`。若 diff 为空或无前端文件，会给出清晰的错误信息。
 
-**使用场景：**
-- 代码合并后，根据 commit 生成功能清单和测试矩阵
-- 无需 Phabricator 的环境下获取 diff
-- 作为增量分析的基础数据源
+#### 3. generate-tests
 
----
+**功能：** 调用 TestAgent 并行生成 happy-path / edge-case / error-path / state-change 四类测试场景，支持增量/全量、限量输出等配置。
 
-#### 3. analyze-test-matrix
-
-**功能：** 分析代码变更的功能清单和测试矩阵，这是测试生成的第一步。
-
-**参数：**
 ```typescript
 {
-  revisionId: string       // Revision ID
-  projectRoot?: string     // 项目根目录绝对路径（强烈推荐提供）
-  forceRefresh?: boolean   // 强制刷新缓存（默认 false）
+  rawDiff: string;
+  identifier?: string;
+  projectRoot?: string;
+  metadata?: Record<string, string>;
+  scenarios?: ('happy-path' | 'edge-case' | 'error-path' | 'state-change')[];
+  mode?: 'incremental' | 'full';
+  maxTests?: number;
+  analyzeMatrix?: boolean; // 默认 true
+  framework?: 'vitest' | 'jest';
 }
 ```
 
-**返回：**
-- 功能清单（变更涉及的功能点）
-- 测试矩阵（每个功能需要的测试场景）
-- 测试框架信息（Vitest/Jest）
-- 项目根目录路径
-- 统计信息（总功能数、总场景数、预估测试数）
+**输出：** `tests`（包含 testFile、testName、代码、置信度等）、`summary`（按场景/文件统计）以及可选的 `matrix`。
 
-**自动执行的步骤：**
-1. 获取 diff 内容
-2. 使用 projectRoot 解析文件路径
-3. 检测测试框架
-4. 分析功能清单和测试矩阵
+#### 4. write-test-file
+
+**功能：** 将 `generate-tests` 产生的结果写入磁盘，自动创建目录并提供 dry-run 预览模式。
+
+```typescript
+{
+  tests: TestCase[];
+  projectRoot?: string;   // 默认当前目录
+  dryRun?: boolean;       // 仅打印将写入的文件
+  overwrite?: boolean;    // 默认 false，避免覆盖已有测试
+}
+```
+
+**输出：** 写入/跳过/失败文件列表以及按框架统计的摘要。
+
+#### 5. run-tests
+
+**功能：** 执行 Vitest/Jest 并返回结构化的执行结果，支持覆盖率、监听模式以及定制测试文件列表。
+
+```typescript
+{
+  testFiles?: string[];
+  projectRoot?: string;
+  framework?: 'vitest' | 'jest';
+  watch?: boolean;
+  coverage?: boolean;
+  timeout?: number; // 默认 30000
+}
+```
+
+**输出：** `success`、`summary`（total/passed/failed/skipped/duration）、`stdout`、`stderr`、`exitCode`。
+
+#### 6. analyze-raw-diff-test-matrix
+
+**功能：** 面向 n8n/GitLab/GitHub 等工作流，直接接受 raw diff 并输出测试矩阵。
+
+```typescript
+{
+  rawDiff: string;
+  identifier: string;
+  projectRoot: string;
+  metadata?: { title?: string; author?: string; mergeRequestId?: string; commitHash?: string; branch?: string; };
+  forceRefresh?: boolean;
+}
+```
+
+**使用场景：** 外部系统已获取 diff，希望在 MCP 中完成分析再决定后续步骤。
+
+#### 7. generate-tests-from-raw-diff
+
+**功能：** raw diff 场景的一体化方案，可选分析矩阵后立即生成测试。
+
+```typescript
+{
+  rawDiff: string;
+  identifier: string;
+  projectRoot: string;
+  metadata?: Record<string, string>;
+  scenarios?: string[];
+  mode?: 'incremental' | 'full';
+  maxTests?: number;
+  analyzeMatrix?: boolean; // 默认 true
+  framework?: 'vitest' | 'jest';
+}
+```
 
 **推荐工作流：**
-1. 调用 `fetch-diff` 查看 diff 内容和文件路径
-2. 执行 `pwd` 命令获取当前工作目录
-3. 调用此工具，传入 `projectRoot` 参数
-4. 保存返回的 `projectRoot` 值，供 `generate-tests` 使用
-
-**注意：** projectRoot 参数虽然可选，但强烈建议提供，否则可能导致路径解析失败。
-
----
-
-#### 4. generate-tests
-
-**功能：** 基于测试矩阵生成具体的单元测试代码，支持多种测试场景。
-
-**参数：**
-```typescript
-{
-  revisionId: string                 // Revision ID
-  projectRoot?: string               // 项目根目录（必须与 analyze-test-matrix 使用相同值）
-  scenarios?: string[]               // 手动指定测试场景（可选）
-  mode?: 'incremental' | 'full'      // 增量或全量模式（默认 incremental）
-  maxTests?: number                  // 最大测试数量（可选）
-  forceRefresh?: boolean             // 强制刷新缓存（默认 false）
-}
-```
-
-**测试场景类型：**
-- **happy-path**: 正常流程测试
-- **edge-case**: 边界条件测试
-- **error-path**: 异常处理测试
-- **state-change**: 状态变更测试
-
-**返回：**
-- 生成的测试用例列表
-- 每个测试的代码、文件路径、场景类型
-- 识别的测试场景
-- 统计信息
-
-**特性：**
-- ✅ 基于现有测试风格生成（通过 Embedding 查找相似测试）
-- ✅ 支持 Vitest 和 Jest
-- ✅ 增量去重，避免生成重复测试
-- ✅ 智能识别需要的测试场景
-
-**推荐工作流：**
-1. 先调用 `analyze-test-matrix` 生成测试矩阵
-2. 从返回结果中获取 `projectRoot` 字段的值
-3. 调用此工具，传入相同的 `projectRoot` 值
-
-**重要：** 必须先调用 `analyze-test-matrix`，且 projectRoot 参数必须与其保持一致。
-
----
-
-#### 5. publish-phabricator-comments
-
-**功能：** 将代码审查问题发布为 Phabricator inline comments。
-
-**参数：**
-```typescript
-{
-  revisionId: string       // Revision ID
-  issues: Issue[]          // 代码审查问题列表
-  message?: string         // 主评论内容（可选，默认自动生成）
-  dryRun?: boolean         // 预览模式，不实际发布（默认 false）
-}
-```
-
-**返回：**
-- published: 发布的评论数量
-- skipped: 跳过的评论数量（已存在）
-- failed: 失败的评论数量
-- summary: 统计信息（按严重程度和维度）
-
-**特性：**
-- ✅ 自动去重已存在的评论
-- ✅ 支持批量发布
-- ✅ 支持预览模式（dryRun）
-- ✅ 自动生成汇总评论
-
-**注意：**
-- 需要设置 `ALLOW_PUBLISH_COMMENTS=true` 才能实际发布
-- 默认为预览模式，设置 `dryRun=false` 才会实际发布
-
-**使用场景：**
-- 发布外部代码审查工具生成的问题到 Phabricator
-- 与第三方代码审查平台集成
-- 预览评论后再决定是否发布
-
----
-
-#### 6. write-test-file
-
-**功能：** 将生成的测试代码写入文件到磁盘。
-
-**参数：**
-```typescript
-{
-  tests: TestCase[]        // 测试用例列表
-  projectRoot?: string     // 项目根目录（必需）
-  dryRun?: boolean         // 预览模式，不实际写入（默认 false）
-  overwrite?: boolean      // 是否覆盖已存在的文件（默认 false）
-}
-```
-
-**返回：**
-- filesWritten: 写入成功的文件列表
-- filesSkipped: 跳过的文件列表（已存在）
-- filesFailed: 写入失败的文件列表
-- summary: 统计信息
-
-**特性：**
-- ✅ 自动创建目录结构
-- ✅ 支持预览模式（dryRun）
-- ✅ 防止覆盖已存在文件（可配置）
-- ✅ 按测试文件分组写入
-
-**使用场景：**
-- 将 `generate-tests` 生成的测试代码落盘
-- 批量创建多个测试文件
-- 预览测试文件后再决定是否写入
-
----
-
-#### 7. run-tests
-
-**功能：** 执行测试命令并返回结果。
-
-**参数：**
-```typescript
-{
-  testFiles?: string[]     // 要运行的测试文件（可选）
-  projectRoot?: string     // 项目根目录（默认当前目录）
-  framework?: 'vitest' | 'jest'  // 测试框架（可选，自动检测）
-  watch?: boolean          // 监听模式（默认 false）
-  coverage?: boolean       // 生成覆盖率报告（默认 false）
-  timeout?: number         // 超时时间（毫秒，默认 30000）
-}
-```
-
-**返回：**
-- success: 测试是否通过
-- framework: 使用的测试框架
-- summary: 测试结果统计（总数、通过、失败、跳过、耗时）
-- stdout: 标准输出
-- stderr: 标准错误输出
-
-**特性：**
-- ✅ 支持 Vitest 和 Jest
-- ✅ 可指定测试文件或运行全部
-- ✅ 解析测试结果统计
-- ✅ 支持覆盖率报告
-
-**使用场景：**
-- 生成测试后自动执行验证
-- CI/CD 流程中执行测试套件
-- 验证代码质量门控
-
----
-
-#### 9. analyze-commit-test-matrix
-
-**功能：** 分析 commit 的功能清单和测试矩阵。
-
-**参数：**
-```typescript
-{
-  commitHash: string      // Git commit hash
-  repoPath?: string       // 仓库路径
-  projectRoot?: string    // 项目根目录
-}
-```
-
-**使用场景：**
-- 代码合并后自动生成测试矩阵
-- CI/CD 流程中根据 commit 分析测试需求
-
----
-
-#### 9. run-tests
-
-**功能：** 在项目中执行测试命令。
-
-**参数：**
-```typescript
-{
-  projectRoot?: string    // 项目根目录
-  command?: string        // 命令（默认 npm）
-  args?: string[]         // 参数（默认 ["test", "--", "--runInBand"]）
-  timeoutMs?: number      // 超时时间（默认 600000）
-}
-```
-
-**使用场景：**
-- 生成测试后自动执行验证
-- CI/CD 流程中执行测试套件
-- 验证代码质量门控
-
----
-
-#### 10. analyze-raw-diff-test-matrix 🆕
-
-**功能：** 从外部传入的 raw diff 内容分析测试矩阵（专为 n8n/GitLab 工作流设计）。
-
-**参数：**
-```typescript
-{
-  rawDiff: string             // Unified diff 格式的原始文本（必需）
-  identifier: string          // 唯一标识符，如 MR ID（必需）
-  projectRoot: string         // 项目根目录绝对路径（必需）
-  metadata?: {                // 可选元数据
-    title?: string            // MR 标题
-    author?: string           // 作者
-    mergeRequestId?: string   // MR ID
-    commitHash?: string       // commit hash
-    branch?: string           // 分支名
-  }
-  forceRefresh?: boolean      // 强制刷新缓存（默认 false）
-}
-```
-
-**返回：**
-- 功能清单和测试矩阵
-- 测试框架信息（Vitest/Jest）
-- 统计信息（功能数、场景数、预估测试数）
-
-**使用场景：**
-- n8n 工作流中，GitLab 节点已获取 diff
-- 支持 GitLab MR、GitHub PR 等平台的 diff
-- 分步式工作流，先分析后决策
-
-**推荐 n8n 工作流：**
-1. [GitLab 节点] 获取 MR diff
-2. [此工具] 分析测试矩阵
-3. [Code 节点] 根据矩阵决策
-4. [MCP: generate-tests-from-raw-diff] 生成测试
-
----
-
-#### 11. generate-tests-from-raw-diff 🆕
-
-**功能：** 从外部传入的 raw diff 一次性完成分析 + 单元测试生成（一体化工具）。
-
-**参数：**
-```typescript
-{
-  rawDiff: string             // Unified diff 格式的原始文本（必需）
-  identifier: string          // 唯一标识符（必需）
-  projectRoot: string         // 项目根目录（必需）
-  metadata?: {                // 可选元数据
-    title?: string
-    author?: string
-    mergeRequestId?: string
-    commitHash?: string
-    branch?: string
-  }
-  scenarios?: string[]        // 手动指定测试场景（可选）
-  mode?: 'incremental' | 'full'  // 增量或全量模式
-  maxTests?: number           // 最大测试数量
-  analyzeMatrix?: boolean     // 是否先分析矩阵（默认 true）
-  forceRefresh?: boolean      // 强制刷新缓存
-}
-```
-
-**返回：**
-- 生成的测试用例列表
-- 识别的测试场景
-- 测试代码、文件路径、场景类型
-- 统计信息
-
-**使用场景：**
-- n8n 工作流中，GitLab 节点已获取 diff
-- 希望直接生成单元测试代码，无需额外步骤
-- 一体化工作流，简洁高效
-
-**推荐 n8n 工作流：**
-1. [GitLab 节点] 获取 MR diff
-2. [此工具] 直接生成测试代码
-3. [Code 节点] 格式化为 GitLab 评论
-4. [GitLab 节点] 发布 MR 评论
-
-**详细文档：** 查看 [N8N_INTEGRATION.md](./N8N_INTEGRATION.md) 了解完整的 n8n 工作流配置和示例。
+1. 在 n8n / CI 中获取 MR/PR diff
+2. 调用 `generate-tests-from-raw-diff` 生成测试与统计信息
+3. （可选）将结果写入文件或发布到代码托管平台
 
 ---
 
@@ -782,19 +521,17 @@ tracking:
 
 ```
 src/
-├── agents/              # 审查和测试生成 Agents
-│   ├── cr/             # 代码审查 Agents
-│   └── tests/          # 测试生成 Agents
+├── agents/             # 测试生成 Agents
+│   └── tests/          # 不同测试场景（happy-path / edge-case 等）
 ├── clients/            # 外部服务客户端
 │   ├── openai.ts       # OpenAI LLM 客户端
-│   ├── embedding.ts    # Embedding 客户端
-│   └── phabricator.ts  # Phabricator API 客户端
-├── orchestrator/       # 工作流编排
+│   └── embedding.ts    # Embedding 客户端
 ├── tools/              # MCP 工具实现
-│   ├── base-analyze-test-matrix.ts  # 测试矩阵分析基类（共享逻辑）
-│   ├── analyze-test-matrix.ts       # Phabricator diff 分析
-│   ├── analyze-commit-test-matrix.ts # Git commit 分析
-│   └── ...
+│   ├── analyze-test-matrix.ts
+│   ├── generate-tests.ts
+│   ├── fetch-commit-changes.ts
+│   ├── analyze-raw-diff-test-matrix.ts
+│   └── generate-tests-from-raw-diff.ts
 ├── prompts/            # AI 提示词模板
 ├── schemas/            # 数据结构定义
 ├── utils/              # 工具函数
@@ -833,7 +570,7 @@ npm run typecheck
 
 ### 增量去重
 
-代码审查和测试生成都支持增量模式,通过 Diff 指纹和 Embedding 相似度计算,避免重复生成相同的评论或测试。
+测试生成支持增量模式，通过 Diff 指纹和 Embedding 相似度计算，避免重复生成相同的测试用例。
 
 ### Embedding 增强
 

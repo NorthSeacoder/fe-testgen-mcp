@@ -2,10 +2,10 @@
  * GenerateTestsTool - 封装 TestAgent 为 MCP 工具
  *
  * 职责：
- * 1. 从 Phabricator 获取 diff
- * 2. 分析测试矩阵（或使用已有的矩阵）
+ * 1. 解析传入的 diff（git、raw diff 等）
+ * 2. 可选地分析测试矩阵
  * 3. 调用 TestAgent 生成测试代码
- * 4. 返回生成的测试用例
+ * 4. 返回结构化测试用例与统计信息
  */
 
 import { z } from 'zod';
@@ -259,7 +259,7 @@ export class GenerateTestsTool extends BaseTool<GenerateTestsInput, GenerateTest
 
     // 3. 创建 CodeChangeSource
     const source = new RawDiffSource(effectiveId, diff, {
-      source: rawDiff ? 'raw' : 'phabricator',
+      source: 'raw',
       identifier: effectiveId,
       title: diff.title,
     });

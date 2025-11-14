@@ -9,28 +9,6 @@ export function generateFingerprint(...parts: (string | number)[]): string {
 }
 
 /**
- * 生成问题的稳定指纹
- * 支持基于行号或代码片段
- */
-export function generateIssueFingerprint(
-  file: string,
-  lineRangeOrSnippet: [number, number] | string,
-  category: string,
-  messageSummary: string
-): string {
-  if (Array.isArray(lineRangeOrSnippet)) {
-    return generateFingerprint(file, lineRangeOrSnippet[0], lineRangeOrSnippet[1], category, messageSummary);
-  }
-  
-  const snippet = lineRangeOrSnippet.trim();
-  if (snippet.length === 0) {
-    return generateFingerprint(file, category, messageSummary);
-  }
-  
-  return generateFingerprint(file, snippet, category, messageSummary);
-}
-
-/**
  * 生成测试的稳定指纹
  */
 export function generateTestFingerprint(

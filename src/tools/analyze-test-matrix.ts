@@ -2,7 +2,7 @@
  * AnalyzeTestMatrixTool - 封装 TestMatrixAnalyzer 为 MCP 工具
  *
  * 职责：
- * 1. 从 Phabricator 获取 diff
+ * 1. 解析传入的 diff（git、raw diff 等）
  * 2. 分析代码变更的功能清单和测试矩阵
  * 3. 检测测试框架
  * 4. 返回测试矩阵结果供后续生成使用

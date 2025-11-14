@@ -25,17 +25,6 @@ export const configSchema = z.object({
   state: z.object({
     dir: z.string().default('.state'),
   }),
-  orchestrator: z.object({
-    parallelAgents: z.boolean().default(true),
-    maxConcurrency: z.number().default(5),
-  }),
-  filter: z.object({
-    confidenceMinGlobal: z.number().default(0.7),
-    scenarioConfidenceMin: z.record(z.number()).default({}),
-    similarityThreshold: z.number().default(0.85),
-    scenarioLimits: z.record(z.number()).optional(),
-  }),
-  testScenarios: z.array(z.string()),
   // 项目特定规则 prompt 路径（可选）
   projectContextPrompt: z.string().optional(),
   // 被测项目的根目录路径（可选，默认为当前工作目录）

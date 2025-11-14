@@ -1,6 +1,6 @@
-import { generateFingerprint, generateIssueFingerprint, generateTestFingerprint } from './fingerprint.js';
+import { generateFingerprint, generateTestFingerprint } from './fingerprint.js';
 
-export { generateFingerprint, generateIssueFingerprint, generateTestFingerprint };
+export { generateFingerprint, generateTestFingerprint };
 
 /**
  * 规范化文件路径

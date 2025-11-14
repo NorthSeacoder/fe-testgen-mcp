@@ -1,7 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.js';
-import type { Issue } from '../schemas/issue.js';
 import type { TestCase } from '../schemas/test-plan.js';
 import type { TestMatrix } from '../schemas/test-matrix.js';
 
@@ -9,21 +8,8 @@ export interface RevisionState {
   revisionId: string;
   diffId: string;
   diffFingerprint: string; // 基于 diff 内容的 hash
-  lastReviewAt?: string;
   lastTestGenAt?: string;
   lastMatrixAnalysisAt?: string;
-  issues: Array<{
-    id: string;
-    file: string;
-    line?: number;
-    codeSnippet?: string;
-    severity: string;
-    category: string;
-    message: string;
-    confidence: number;
-    createdAt: string;
-    publishedAt?: string;
-  }>;
   tests: Array<{
     id: string;
     file: string;
@@ -90,33 +76,6 @@ export class StateManager {
   }
 
   /**
-   * 更新状态中的问题列表
-   */
-  async updateIssues(revisionId: string, issues: Issue[]): Promise<void> {
-    const state = await this.getState(revisionId);
-    if (!state) {
-      logger.warn(`State not found for revision ${revisionId}, cannot update issues`);
-      return;
-    }
-
-    state.issues = issues.map(issue => ({
-      id: issue.id,
-      file: issue.file,
-      line: issue.line,
-      codeSnippet: issue.codeSnippet,
-      severity: issue.severity,
-      category: issue.topic,
-      message: issue.message,
-      confidence: issue.confidence,
-      createdAt: issue.createdAt || new Date().toISOString(),
-      publishedAt: issue.publishedAt,
-    }));
-
-    state.lastReviewAt = new Date().toISOString();
-    await this.saveState(state);
-  }
-
-  /**
    * 更新状态中的测试列表
    */
   async updateTests(revisionId: string, tests: TestCase[]): Promise<void> {
@@ -135,22 +94,6 @@ export class StateManager {
 
     state.lastTestGenAt = new Date().toISOString();
     await this.saveState(state);
-  }
-
-  /**
-   * 标记问题已发布
-   */
-  async markIssuePublished(revisionId: string, issueId: string): Promise<void> {
-    const state = await this.getState(revisionId);
-    if (!state) {
-      return;
-    }
-
-    const issue = state.issues.find(i => i.id === issueId);
-    if (issue) {
-      issue.publishedAt = new Date().toISOString();
-      await this.saveState(state);
-    }
   }
 
   /**
@@ -190,7 +133,6 @@ export class StateManager {
         revisionId,
         diffId,
         diffFingerprint,
-        issues: [],
         tests: [],
       };
       await this.saveState(state);

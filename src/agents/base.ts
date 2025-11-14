@@ -149,65 +149,6 @@ export abstract class BaseAgent<T> {
   }
 
   /**
-   * 生成标准的代码片段使用说明（所有 CR agents 共用）
-   * 
-   * ✨ 新方法：使用代码片段而不是行号，更可靠！
-   */
-  protected getCodeSnippetInstructions(): string {
-    return `**重要说明 - 如何报告问题位置（请仔细阅读）**：
-
-1. **使用代码片段，不要使用行号**：
-   ✅ 推荐：返回 "codeSnippet" 字段，包含问题代码的特征性片段
-   ✅ 例如：如果看到 "+const foo = 1;" 有问题，返回 "codeSnippet": "const foo = 1"
-   ✅ 例如：如果看到 "useEffect(() => {" 有问题，返回 "codeSnippet": "useEffect(() => {"
-   ❌ 不推荐：返回 "line" 字段（容易出错，工具会自动根据代码片段定位行号）
-
-2. **代码片段选择技巧**：
-   - 选择有特征的代码片段（不要太短，至少 5-10 个字符）
-   - 可以是完整的一行，也可以是行的一部分
-   - 优先选择问题代码的核心部分（如函数名、变量名、关键语法）
-   - 如果是多行问题，选择最有代表性的那一行
-   
-3. **示例**：
-   问题代码: \`NEW_LINE_42: +const [count] = useState(0); ← REVIEWABLE (ADDED)\`
-   正确返回: \`"codeSnippet": "const [count] = useState(0)"\` 或 \`"codeSnippet": "useState(0)"\`
-   
-   问题代码: \`NEW_LINE_15: :enable-reset="false" ← REVIEWABLE (CONTEXT)\`
-   正确返回: \`"codeSnippet": ":enable-reset=\\"false\\""\` 或 \`"codeSnippet": "enable-reset"\`
-
-4. **其他注意事项**：
-   - diff 中只显示了变更的行及其上下文，未显示的行不代表不存在
-   - 在判断某个导入是否使用时，请检查完整的文件内容
-   - 如果你不确定某个问题是否真的存在，请降低置信度至 0.5 以下或不报告
-   - 返回的 file 字段必须使用下面"变更的文件列表"中的准确路径
-   - 不要报告已删除的行（标记为 "DELETED" 或 "NOT REVIEWABLE" 的行）`;
-  }
-
-  /**
-   * 生成标准的行号说明（向后兼容，建议使用 getCodeSnippetInstructions）
-   * @deprecated 建议使用 getCodeSnippetInstructions() 代替
-   */
-  protected getLineNumberInstructions(): string {
-    return `**重要说明 - 行号格式（请仔细阅读）**：
-1. 下面的 diff 使用特殊格式标记行号，并明确哪些行可评论：
-   - NEW_LINE_10: +import React from 'react'; ← REVIEWABLE (ADDED)  ← 这是新文件的第10行（新增的行，可评论）
-   - NEW_LINE_15:  const a = 1; ← REVIEWABLE (CONTEXT)  ← 这是新文件的第15行（未改变的上下文行，也可评论）
-   - DELETED (was line 8): -const old = 1; ← NOT REVIEWABLE  ← 这一行已被删除，不在新文件中
-
-2. **关键规则 - 必须严格遵守**：
-   ✅ 返回的 line 字段必须使用 NEW_LINE_xxx 中的数字，并且只针对带有 "← REVIEWABLE" 标记的行（ADDED 或 CONTEXT 均可）
-   ✅ 例如看到 "NEW_LINE_42: +const foo = 1; ← REVIEWABLE (ADDED)" 应该返回 "line": 42
-   ❌ 绝对不要报告 DELETED / NOT REVIEWABLE 的行（这些行已不存在于新文件中）
-   ❌ 如果看到 "DELETED (was line 8)"，不要使用数字 8
-
-3. 其他注意事项：
-   - diff 中只显示了变更的行及其上下文，未显示的行不代表不存在
-   - 在判断某个导入是否使用时，请务必检查完整的文件内容，不要仅根据 diff 片段判断
-   - 如果你不确定某个问题是否真的存在（如上下文不足），请降低置信度至 0.5 以下或不报告
-   - 返回的 file 字段必须使用下面"变更的文件列表"中的准确路径，不要修改扩展名（如不要把 .less 改成 .css）`;
-  }
-
-  /**
    * 修正文件路径（处理 AI 可能返回的错误扩展名）
    * @param reportedPath AI 返回的文件路径
    * @param files 实际的文件列表

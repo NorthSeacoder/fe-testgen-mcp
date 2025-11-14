@@ -79,7 +79,7 @@ export function formatErrorResponse(error: unknown) {
 }
 
 /**
- * 格式化 Diff 响应（用于 fetch-diff 和 fetch-commit-changes）
+ * 格式化 Diff 响应（用于 diff 获取类工具）
  */
 export function formatDiffResponse(diff: Diff, metadata?: {
   commit?: {

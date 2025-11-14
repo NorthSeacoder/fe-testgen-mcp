@@ -35,7 +35,7 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
         const newPath = match[2];
         currentFile = {
           path: newPath,
-          changeType: 'modified', // 默认，后续会根据上下文判断
+          changeType: 'modified',
           additions: 0,
           deletions: 0,
           hunks: [],
@@ -46,7 +46,6 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
       continue;
     }
 
-    // 新文件：new file mode
     if (line.startsWith('new file mode')) {
       if (currentFile) {
         currentFile.changeType = 'added';
@@ -54,7 +53,6 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
       continue;
     }
 
-    // 删除文件：deleted file mode
     if (line.startsWith('deleted file mode')) {
       if (currentFile) {
         currentFile.changeType = 'deleted';
@@ -62,7 +60,6 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
       continue;
     }
 
-    // 重命名：rename from/to
     if (line.startsWith('rename from') || line.startsWith('rename to')) {
       if (currentFile) {
         currentFile.changeType = 'renamed';
@@ -70,10 +67,8 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
       continue;
     }
 
-    // Hunk 头：@@ -oldStart,oldLines +newStart,newLines @@
     const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
     if (hunkMatch) {
-      // 保存上一个 hunk
       if (currentHunk && currentFile) {
         currentHunk.lines = hunkLines;
         currentFile.hunks.push(currentHunk);
@@ -95,7 +90,6 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
       continue;
     }
 
-    // 统计增删行数
     if (currentFile && currentHunk) {
       if (line.startsWith('+') && !line.startsWith('+++')) {
         currentFile.additions++;
@@ -109,7 +103,6 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
     }
   }
 
-  // 保存最后一个文件
   if (currentFile) {
     if (currentHunk) {
       currentHunk.lines = hunkLines;
@@ -130,10 +123,7 @@ export function parseDiff(rawDiff: string, revisionId: string, metadata?: {
 }
 
 /**
- * 生成带行号的 diff 文本
- * ✅ 优化后的格式，强调新文件行号（NEW_LINE_xxx）
- * 使 AI 更容易识别应该使用的行号
- * ✅ 添加 ← REVIEWABLE 标记，明确标识可以评论的行
+ * 生成带行号的 diff 文本，突出 NEW_LINE_xxx 标记，方便测试生成阶段引用
  */
 export function generateNumberedDiff(diff: Diff): string {
   let result = '';
@@ -149,7 +139,7 @@ export function generateNumberedDiff(diff: Diff): string {
   for (const file of diff.files) {
     result += `File: ${file.path}\n`;
     result += `Changes: +${file.additions} -${file.deletions}\n`;
-    result += `Important: When reporting issues, use NEW_LINE_xxx numbers (marked with ← REVIEWABLE)\n\n`;
+    result += `Hint: Use NEW_LINE_xxx markers when referencing lines in this file\n\n`;
 
     for (const hunk of file.hunks) {
       result += `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`;
@@ -159,20 +149,16 @@ export function generateNumberedDiff(diff: Diff): string {
       
       for (const line of hunk.lines) {
         if (line.startsWith('+') && !line.startsWith('+++')) {
-          // 新增行：使用显眼的 NEW_LINE 前缀 + REVIEWABLE 标记
-          result += `NEW_LINE_${newLineNum}: ${line} ← REVIEWABLE (ADDED)\n`;
+          result += `NEW_LINE_${newLineNum}: ${line} ← CHANGED (ADDED)\n`;
           newLineNum++;
         } else if (line.startsWith('-') && !line.startsWith('---')) {
-          // 删除行：明确标记为 DELETED（不在新文件中，不可评论）
-          result += `DELETED (was line ${oldLineNum}): ${line} ← NOT REVIEWABLE\n`;
+          result += `DELETED (was line ${oldLineNum}): ${line} ← REMOVED\n`;
           oldLineNum++;
         } else if (!line.startsWith('\\') && !line.startsWith('@@')) {
-          // 上下文行：也使用 NEW_LINE 前缀 + REVIEWABLE 标记
-          result += `NEW_LINE_${newLineNum}: ${line} ← REVIEWABLE (CONTEXT)\n`;
+          result += `NEW_LINE_${newLineNum}: ${line} ← CONTEXT\n`;
           oldLineNum++;
           newLineNum++;
         } else {
-          // 其他行（如 "\ No newline at end of file"）
           result += line + '\n';
         }
       }
