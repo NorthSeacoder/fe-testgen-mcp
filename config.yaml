@@ -14,10 +14,6 @@ embedding:
   model: ${EMBEDDING_MODEL}
   enabled: true  # 暂时禁用 embedding 去重，使用签名匹配
 
-phabricator:
-  host: ${PHABRICATOR_HOST}
-  token: ${PHABRICATOR_TOKEN}
-
 cache:
   dir: .cache
   ttl: 86400
@@ -54,16 +50,6 @@ filter:
 orchestrator:
   parallelAgents: true
   maxConcurrency: 5
-
-crTopics:
-  - react
-  - typescript
-  - performance
-  - accessibility
-  - security
-  - css
-  - i18n
-  - testing-suggestions
 
 testScenarios:
   - happy-path

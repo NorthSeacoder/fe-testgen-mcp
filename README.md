@@ -1,20 +1,10 @@
 # fe-testgen-mcp
 
-Frontend Phabricator Diff Review and Unit Test Generation MCP Server
+Frontend Test Generation MCP Server
 
-基于 MCP 协议的前端代码审查和单元测试生成工具,支持从 Phabricator 获取 Diff 并进行智能分析。
+基于 MCP 协议的前端单元测试生成工具，支持从客户端或工作流中获取代码变更并进行智能测试生成。
 
 ## 功能特性
-
-### 代码审查
-- ✅ 多维度代码审查 (React/TypeScript/性能/安全/可访问性/CSS/国际化)
-- ✅ 自动识别审查主题
-- ✅ 多 Agent 并行执行
-- ✅ 增量去重,避免重复评论
-- ✅ 智能合并同行评论
-- ✅ 自动发布到 Phabricator
-
-> ⚠️ **注意**：代码审查工具仅支持 Phabricator Diff（需要通过 `fetch-diff` 获取 diffId，确保行号准确）。
 
 ### 测试生成
 - ✅ 智能分析测试矩阵
@@ -141,9 +131,9 @@ cache:
 # projectContextPrompt: "src/prompts/project-context.md"
 ```
 
-### 3. 自定义审查规则 (可选)
+### 3. 自定义项目规则 (可选)
 
-编辑 `src/prompts/project-context.md` 添加项目特定的审查规则,然后在 `config.yaml` 中启用:
+编辑 `src/prompts/project-context.md` 添加项目特定的规则,然后在 `config.yaml` 中启用:
 
 ```yaml
 projectContextPrompt: "src/prompts/project-context.md"
@@ -151,7 +141,7 @@ projectContextPrompt: "src/prompts/project-context.md"
 
 ### 4. 仓库级 Prompt 配置（推荐）
 
-`review-frontend-diff` 和 `generate-tests` 会在运行时自动合并项目特定的 Prompt。系统会按以下优先级顺序查找配置文件（命中第一个非空文件即停止）：
+`generate-tests` 会在运行时自动合并项目特定的 Prompt。系统会按以下优先级顺序查找配置文件（命中第一个非空文件即停止）：
 
 1. `fe-mcp` / `fe-mcp.md` / `fe-mcp.mdc` （**FE MCP 专用配置，推荐**）
 2. `.cursorrules` （Cursor AI 编辑器规则）
@@ -414,7 +404,6 @@ tracking:
 > 📋 **工具状态**:
 > - ✅ **fetch-diff** - 已实现
 > - ✅ **fetch-commit-changes** - 已实现  
-> - ✅ **review-frontend-diff** - 封装 ReviewAgent 的多维度代码审查工具
 > - ✅ **analyze-test-matrix** - 封装 TestMatrixAnalyzer 的测试矩阵分析工具
 > - ✅ **generate-tests** - 封装 TestAgent 的测试生成工具
 > - ✅ **publish-phabricator-comments** - 发布审查评论到 Phabricator
@@ -479,56 +468,7 @@ tracking:
 
 ---
 
-#### 3. review-frontend-diff
-
-**功能：** 对前端代码变更进行多维度智能审查，支持自动识别审查主题并生成评论。
-
-> 💡 **行号说明**：diff 中所有新行都以 `NEW_LINE_XX` 开头；所有已删除的行会标记为 `DELETED (was line XX)`。
-> 发布评论时将始终使用 `NEW_LINE_XX` 对应的新文件行号，避免出现行数偏移。
-
-**参数：**
-```typescript
-{
-  revisionId: string                 // Revision ID
-  dimensions?: string[]              // 手动指定审查维度（可选）
-  mode?: 'incremental' | 'full'      // 增量或全量模式（默认 incremental）
-  publish?: boolean                  // 是否发布评论到 Phabricator（默认 false）
-  forceRefresh?: boolean             // 强制刷新缓存（默认 false）
-  minConfidence?: number             // 最小置信度阈值（默认 0.7）
-  projectRoot?: string               // 项目根目录（用于加载项目规则）
-}
-```
-
-**审查维度：**
-- React 最佳实践
-- TypeScript 类型安全
-- 性能优化
-- 安全性检查
-- 可访问性（a11y）
-- CSS/样式规范
-- 国际化（i18n）
-- 测试建议
-
-**返回：**
-- 实际执行的审查维度
-- 发现的问题列表（文件、行号、描述、严重程度、置信度）
-- 是否已发布到 Phabricator
-- 汇总统计（按严重程度和维度统计）
-
-**特性：**
-- ✅ 自动识别需要审查的主题
-- ✅ 多 Agent 并行执行
-- ✅ 增量去重，避免重复评论
-- ✅ 智能合并同行评论
-
-**推荐工作流：**
-1. 调用 `fetch-diff` 查看变更内容
-2. 调用 `review-frontend-diff` 进行审查
-3. 设置 `publish: true` 自动发布评论
-
----
-
-#### 4. analyze-test-matrix
+#### 3. analyze-test-matrix
 
 **功能：** 分析代码变更的功能清单和测试矩阵，这是测试生成的第一步。
 
@@ -564,7 +504,7 @@ tracking:
 
 ---
 
-#### 5. generate-tests
+#### 4. generate-tests
 
 **功能：** 基于测试矩阵生成具体的单元测试代码，支持多种测试场景。
 
@@ -607,7 +547,7 @@ tracking:
 
 ---
 
-#### 6. publish-phabricator-comments
+#### 5. publish-phabricator-comments
 
 **功能：** 将代码审查问题发布为 Phabricator inline comments。
 
@@ -638,13 +578,13 @@ tracking:
 - 默认为预览模式，设置 `dryRun=false` 才会实际发布
 
 **使用场景：**
-- 将 `review-frontend-diff` 生成的问题发布到 Phabricator
-- 手动发布自定义评论
+- 发布外部代码审查工具生成的问题到 Phabricator
+- 与第三方代码审查平台集成
 - 预览评论后再决定是否发布
 
 ---
 
-#### 7. write-test-file
+#### 6. write-test-file
 
 **功能：** 将生成的测试代码写入文件到磁盘。
 
@@ -677,7 +617,7 @@ tracking:
 
 ---
 
-#### 8. run-tests
+#### 7. run-tests
 
 **功能：** 执行测试命令并返回结果。
 

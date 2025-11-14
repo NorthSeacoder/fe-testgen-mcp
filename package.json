@@ -1,7 +1,7 @@
 {
   "name": "fe-testgen-mcp",
   "version": "0.0.1",
-  "description": "Frontend Phabricator Diff Review and Unit Test Generation MCP Server",
+  "description": "Frontend Test Generation MCP Server",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -14,7 +14,6 @@
   "keywords": [
     "mcp",
     "phabricator",
-    "code-review",
     "test-generation",
     "frontend",
     "typescript"

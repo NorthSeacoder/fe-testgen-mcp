@@ -4,7 +4,6 @@ import { OpenAIClient } from '../clients/openai.js';
 import { logger } from '../utils/logger.js';
 
 export interface TopicIdentifierResult {
-  crTopics: string[];
   testScenarios: string[];
 }
 
@@ -37,7 +36,6 @@ export class TopicIdentifierAgent extends BaseAgent<TopicIdentifierResult> {
       // 返回默认值
       return {
         items: [{
-          crTopics: ['testing-suggestions'],
           testScenarios: ['happy-path'],
         }],
         confidence: 0.5,
@@ -48,7 +46,7 @@ export class TopicIdentifierAgent extends BaseAgent<TopicIdentifierResult> {
   private buildPrompt(diff: string, commitMessage?: string): string {
     const commitBlock = commitMessage ? `\nCommit Message:\n${commitMessage}\n` : '';
     
-    return `分析以下代码变更，识别涉及的主题和测试场景：
+    return `分析以下代码变更，识别涉及的测试场景：
 
 ${commitBlock}
 代码变更（diff）：
@@ -56,14 +54,12 @@ ${commitBlock}
 ${diff}
 \`\`\`
 
-仅返回 JSON 格式，包含两个数组：
-- crTopics: CR 主题列表
+仅返回 JSON 格式，包含测试场景数组：
 - testScenarios: 测试场景列表
 
 示例：
 \`\`\`json
 {
-  "crTopics": ["react", "typescript"],
   "testScenarios": ["happy-path", "edge-case"]
 }
 \`\`\`
@@ -80,7 +76,6 @@ ${diff}
         const parsed = JSON.parse(jsonStr);
         
         return {
-          crTopics: Array.isArray(parsed.crTopics) ? parsed.crTopics : [],
           testScenarios: Array.isArray(parsed.testScenarios) ? parsed.testScenarios : [],
         };
       }
@@ -88,14 +83,12 @@ ${diff}
       // 如果没有 JSON，尝试直接解析
       const parsed = JSON.parse(response);
       return {
-        crTopics: Array.isArray(parsed.crTopics) ? parsed.crTopics : [],
         testScenarios: Array.isArray(parsed.testScenarios) ? parsed.testScenarios : [],
       };
     } catch (error) {
       logger.warn('Failed to parse TopicIdentifier response', { response, error });
       // 返回默认值
       return {
-        crTopics: ['testing-suggestions'],
         testScenarios: ['happy-path'],
       };
     }
@@ -107,7 +100,7 @@ ${diff}
   async identifyTopics(
     diff: string,
     commitMessage?: string
-  ): Promise<{ crTopics: string[]; testScenarios: string[] }> {
+  ): Promise<{ testScenarios: string[] }> {
     const result = await this.execute({
       diff,
       files: [],
@@ -115,7 +108,6 @@ ${diff}
     });
 
     return result.items[0] || {
-      crTopics: ['testing-suggestions'],
       testScenarios: ['happy-path'],
     };
   }

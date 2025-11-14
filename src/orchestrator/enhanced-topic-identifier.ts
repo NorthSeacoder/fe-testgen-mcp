@@ -21,7 +21,7 @@ export class EnhancedTopicIdentifier extends TopicIdentifierAgent {
   async identifyTopicsWithEmbedding(
     diff: Diff,
     commitMessage?: string
-  ): Promise<{ crTopics: string[]; testScenarios: string[] }> {
+  ): Promise<{ testScenarios: string[] }> {
     // 1. 先使用基础 LLM 识别
     const basicResult = await this.identifyTopics(diff.raw, commitMessage);
 
@@ -39,35 +39,29 @@ export class EnhancedTopicIdentifier extends TopicIdentifierAgent {
         changeDescriptions.join(' '),
       ]);
 
-      // 4. 定义主题关键词的 Embedding（预计算或从缓存获取）
-      const topicKeywords: Record<string, string[]> = {
-        react: ['react', 'component', 'hook', 'useState', 'useEffect', 'jsx', 'tsx'],
-        typescript: ['typescript', 'type', 'interface', 'any', 'unknown'],
-        performance: ['performance', 'memo', 'useMemo', 'useCallback', 'optimization'],
-        accessibility: ['accessibility', 'a11y', 'aria', 'semantic', 'keyboard'],
-        security: ['security', 'xss', 'csrf', 'dangerous', 'vulnerability'],
-        css: ['css', 'style', 'scss', 'less', 'styling'],
-        i18n: ['i18n', 'internationalization', 'locale', 'translation', 'hardcoded'],
+      // 4. 定义测试场景关键词（预计算或从缓存获取）
+      const scenarioKeywords: Record<string, string[]> = {
+        'happy-path': ['happy path', 'default', 'nominal'],
+        'edge-case': ['edge case', 'boundary', 'corner'],
+        'error-path': ['error', 'exception', 'fail'],
+        'state-change': ['state', 'transition', 'toggle'],
       };
 
-      // 5. 计算相似度，增强识别结果
-      const enhancedTopics: string[] = [...basicResult.crTopics];
-      
-      // 简单的关键词匹配增强（实际可以更复杂）
+      // 5. 基于关键词增强测试场景识别
+      const enhancedScenarios: string[] = [...basicResult.testScenarios];
       const combinedText = `${filePaths.join(' ')} ${changeDescriptions.join(' ')}`.toLowerCase();
-      for (const [topic, keywords] of Object.entries(topicKeywords)) {
+      for (const [scenario, keywords] of Object.entries(scenarioKeywords)) {
         if (keywords.some(kw => combinedText.includes(kw.toLowerCase()))) {
-          if (!enhancedTopics.includes(topic)) {
-            enhancedTopics.push(topic);
+          if (!enhancedScenarios.includes(scenario)) {
+            enhancedScenarios.push(scenario);
           }
         }
       }
 
-      logger.info(`Enhanced topic identification: ${enhancedTopics.join(', ')}`);
+      logger.info(`Enhanced test scenario identification: ${enhancedScenarios.join(', ')}`);
       
       return {
-        crTopics: enhancedTopics,
-        testScenarios: basicResult.testScenarios,
+        testScenarios: enhancedScenarios,
       };
     } catch (error) {
       logger.warn('Embedding enhancement failed, fallback to basic', { error });

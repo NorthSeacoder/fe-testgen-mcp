@@ -4,7 +4,6 @@
 
 import type { OpenAIClient } from '../clients/openai.js';
 import type { EmbeddingClient } from '../clients/embedding.js';
-import type { PhabricatorClient } from '../clients/phabricator.js';
 import type { Cache } from '../cache/cache.js';
 import type { StateManager } from '../state/manager.js';
 import type { ContextStore, Memory } from './context.js';
@@ -13,7 +12,6 @@ import type { MCPTrackingService } from '../utils/tracking-service.js';
 export interface AppContext {
   openai: OpenAIClient;
   embedding: EmbeddingClient;
-  phabricator: PhabricatorClient;
   cache: Cache;
   state: StateManager;
   contextStore: ContextStore;

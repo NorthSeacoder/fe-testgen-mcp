@@ -18,10 +18,6 @@ export const configSchema = z.object({
     model: z.string().default('text-embedding-3-small'),
     enabled: z.boolean().default(true),
   }),
-  phabricator: z.object({
-    host: z.string().url(),
-    token: z.string(),
-  }),
   cache: z.object({
     dir: z.string().default('.cache'),
     ttl: z.number().default(86400),
@@ -39,7 +35,6 @@ export const configSchema = z.object({
     similarityThreshold: z.number().default(0.85),
     scenarioLimits: z.record(z.number()).optional(),
   }),
-  crTopics: z.array(z.string()),
   testScenarios: z.array(z.string()),
   // 项目特定规则 prompt 路径（可选）
   projectContextPrompt: z.string().optional(),
