@@ -1,7 +1,12 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: [
+    'src/index.ts',
+    'src/workers/analysis-worker.ts',
+    'src/workers/generation-worker.ts',
+    'src/workers/test-runner-worker.ts',
+  ],
   format: ['esm'],
   dts: false, // 暂时禁用类型定义生成以避免 FastMCP 类型错误
   splitting: false,

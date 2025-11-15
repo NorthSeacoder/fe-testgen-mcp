@@ -12,9 +12,14 @@ import { setAppContext } from './core/app-context.js';
 import { initializeMetrics, getMetrics } from './utils/metrics.js';
 import { OpenAIClient } from './clients/openai.js';
 import { EmbeddingClient } from './clients/embedding.js';
+import { GitClient } from './clients/git-client.js';
 import { Cache } from './cache/cache.js';
 import { StateManager } from './state/manager.js';
+import { WorkspaceManager } from './orchestrator/workspace-manager.js';
+import { ProjectDetector } from './orchestrator/project-detector.js';
 import { FetchCommitChangesTool } from './tools/fetch-commit-changes.js';
+import { FetchDiffFromRepoTool } from './tools/fetch-diff-from-repo.js';
+import { DetectProjectConfigTool } from './tools/detect-project-config.js';
 import { AnalyzeTestMatrixTool } from './tools/analyze-test-matrix.js';
 import { GenerateTestsTool } from './tools/generate-tests.js';
 import { WriteTestFileTool } from './tools/write-test-file.js';
@@ -32,6 +37,10 @@ dotenv.config();
 let toolRegistry: ToolRegistry;
 let memory: Memory;
 let trackingService: MCPTrackingService | undefined;
+let gitClientInstance: GitClient | undefined;
+let workspaceManagerInstance: WorkspaceManager | undefined;
+let projectDetectorInstance: ProjectDetector | undefined;
+let workspaceCleanupInterval: NodeJS.Timeout | undefined;
 
 function initialize() {
   const config = loadConfig();
@@ -87,6 +96,11 @@ function initialize() {
   const contextStore = new ContextStore();
   memory = new Memory();
 
+  // 初始化 Git 和 Workspace 管理器
+  gitClientInstance = new GitClient();
+  workspaceManagerInstance = new WorkspaceManager(gitClientInstance);
+  projectDetectorInstance = new ProjectDetector();
+
   // 设置全局上下文
   setAppContext({
     openai,
@@ -96,13 +110,25 @@ function initialize() {
     contextStore,
     memory,
     tracking: trackingService,
+    gitClient: gitClientInstance,
+    workspaceManager: workspaceManagerInstance,
+    projectDetector: projectDetectorInstance,
   });
+
+  // 启动定时清理任务
+  workspaceCleanupInterval = setInterval(() => {
+    workspaceManagerInstance?.cleanupExpired().catch((error) => {
+      logger.error('[WorkspaceManager] Cleanup failed', { error });
+    });
+  }, 10 * 60 * 1000);
 
   // 注册所有工具
   toolRegistry = new ToolRegistry();
   
   // 1. 核心数据获取工具
   toolRegistry.register(new FetchCommitChangesTool());
+  toolRegistry.register(new FetchDiffFromRepoTool());
+  toolRegistry.register(new DetectProjectConfigTool());
 
   // 2. Agent 封装工具
   toolRegistry.register(new AnalyzeTestMatrixTool(openai, state));
@@ -338,6 +364,14 @@ process.on('SIGINT', async () => {
   logger.info('Shutting down...');
   getMetrics().recordCounter('server.shutdown', 1);
   memory.cleanup();
+
+  if (workspaceCleanupInterval) {
+    clearInterval(workspaceCleanupInterval);
+  }
+
+  if (workspaceManagerInstance) {
+    await workspaceManagerInstance.cleanupAll();
+  }
 
   if (trackingService) {
     void trackingService.trackServerEvent('shutdown');

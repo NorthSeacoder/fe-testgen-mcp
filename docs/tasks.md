@@ -33,7 +33,7 @@
 
 ### 📝 子任务列表
 
-#### M1.1 创建 Git 客户端（~200 行）
+#### M1.1 创建 Git 客户端（~200 行） ✅
 
 **文件**：`src/clients/git-client.ts`
 
@@ -63,7 +63,7 @@ export class GitClient {
 
 ---
 
-#### M1.2 创建工作区管理器（~300 行）
+#### M1.2 创建工作区管理器（~300 行） ✅
 
 **文件**：`src/orchestrator/workspace-manager.ts`
 
@@ -105,7 +105,7 @@ export class WorkspaceManager {
 
 ---
 
-#### M1.3 创建项目检测器（~400 行）
+#### M1.3 创建项目检测器（~400 行） ✅
 
 **文件**：`src/orchestrator/project-detector.ts`
 
@@ -148,7 +148,7 @@ export class ProjectDetector {
 
 ---
 
-#### M1.4 创建工具：fetch-diff-from-repo（~200 行）
+#### M1.4 创建工具：fetch-diff-from-repo（~200 行） ✅
 
 **文件**：`src/tools/fetch-diff-from-repo.ts`
 
@@ -193,7 +193,7 @@ export class ProjectDetector {
 
 ---
 
-#### M1.5 创建工具：detect-project-config（~100 行）
+#### M1.5 创建工具：detect-project-config（~100 行） ✅
 
 **文件**：`src/tools/detect-project-config.ts`
 
@@ -223,7 +223,7 @@ ProjectConfig
 
 ---
 
-#### M1.6 更新 AppContext（~50 行）
+#### M1.6 更新 AppContext（~50 行） ✅
 
 **文件**：`src/core/app-context.ts`
 
@@ -267,7 +267,7 @@ setInterval(() => {
 
 ---
 
-#### M1.7 注册新工具到 MCP（~20 行）
+#### M1.7 注册新工具到 MCP（~20 行） ✅
 
 **文件**：`src/index.ts`
 
@@ -321,7 +321,7 @@ const result2 = await mcpAgent.call('fetch-diff-from-repo', {
 
 ### 📝 子任务列表
 
-#### M2.1 创建 Worker 池管理器（~200 行）
+#### M2.1 创建 Worker 池管理器（~200 行） ✅
 
 **文件**：`src/workers/worker-pool.ts`
 

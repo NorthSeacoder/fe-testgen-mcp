@@ -8,6 +8,9 @@ import type { Cache } from '../cache/cache.js';
 import type { StateManager } from '../state/manager.js';
 import type { ContextStore, Memory } from './context.js';
 import type { MCPTrackingService } from '../utils/tracking-service.js';
+import type { WorkspaceManager } from '../orchestrator/workspace-manager.js';
+import type { ProjectDetector } from '../orchestrator/project-detector.js';
+import type { GitClient } from '../clients/git-client.js';
 
 export interface AppContext {
   openai: OpenAIClient;
@@ -17,6 +20,9 @@ export interface AppContext {
   contextStore: ContextStore;
   memory: Memory;
   tracking?: MCPTrackingService;
+  workspaceManager?: WorkspaceManager;
+  projectDetector?: ProjectDetector;
+  gitClient?: GitClient;
 }
 
 let currentContext: AppContext | null = null;
