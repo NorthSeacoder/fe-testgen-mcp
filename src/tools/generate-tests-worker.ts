@@ -5,7 +5,6 @@
 
 import { BaseTool } from '../core/base-tool.js';
 import type { ToolMetadata } from '../core/base-tool.js';
-import type { TestMatrix } from '../schemas/test-matrix.js';
 import type { TestCase } from '../schemas/test-plan.js';
 import { getAppContext } from '../core/app-context.js';
 import { OpenAIClient } from '../clients/openai.js';
