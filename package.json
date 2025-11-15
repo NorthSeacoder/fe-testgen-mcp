@@ -8,6 +8,7 @@
     "build": "tsup",
     "dev": "NODE_ENV=development tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "echo \"No tests specified\"",
     "start": "node dist/index.js"
   },
   "keywords": [
