@@ -22,18 +22,28 @@ export class ProjectDetector {
   /**
    * 检测项目配置
    */
-  async detectProject(workDir: string): Promise<ProjectConfig> {
-    logger.info('[ProjectDetector] Detecting project', { workDir });
+  async detectProject(workDir: string, packageRoot?: string): Promise<ProjectConfig> {
+    logger.info('[ProjectDetector] Detecting project', { workDir, packageRoot });
 
     const isMonorepo = await this.detectMonorepo(workDir);
     const monorepoType = isMonorepo ? await this.detectMonorepoType(workDir) : undefined;
-    const testFramework = await this.detectTestFramework(workDir);
-    const hasExistingTests = await this.detectExistingTests(workDir);
+    
+    // 加载自定义规则（优先从 packageRoot 加载，如果是 monorepo）
+    const effectiveRoot = packageRoot || workDir;
+    const customRules = await this.loadCustomRules(effectiveRoot, workDir);
+    
+    // 从自定义规则中解析测试框架
+    const frameworkFromRules = customRules ? this.parseTestFrameworkFromRules(customRules) : undefined;
+    
+    // 如果规则中有指定测试框架，就使用；否则自动检测
+    const testFramework = frameworkFromRules || await this.detectTestFramework(effectiveRoot);
+    
+    const hasExistingTests = await this.detectExistingTests(effectiveRoot);
     const testPattern = this.getTestPattern(testFramework);
-    const customRules = await this.loadCustomRules(workDir);
 
     const config: ProjectConfig = {
       projectRoot: workDir,
+      packageRoot,
       isMonorepo,
       monorepoType,
       testFramework,
@@ -50,6 +60,7 @@ export class ProjectDetector {
       hasExistingTests: config.hasExistingTests,
       packageRoot: config.packageRoot,
       customRulesLoaded: Boolean(config.customRules),
+      frameworkFromRules: Boolean(frameworkFromRules),
     });
 
     return config;
@@ -280,24 +291,61 @@ export class ProjectDetector {
 
   /**
    * 加载自定义规则
+   * 只读取 .cursor/rules/test-strategy.md
+   * 如果是 monorepo，优先从子项目根目录查找
    */
-  private async loadCustomRules(workDir: string): Promise<string | undefined> {
-    const rulePaths = [
-      '.cursor/rule/fe-mcp.md',
-      'fe-mcp.md',
-      '.cursorrules',
-      '.cursor/rules',
-    ];
+  private async loadCustomRules(primaryRoot: string, projectRoot?: string): Promise<string | undefined> {
+    const ruleFileName = '.cursor/rules/test-strategy.md';
 
-    for (const rulePath of rulePaths) {
-      const fullPath = path.join(workDir, rulePath);
-      if (existsSync(fullPath)) {
+    // 1. 优先从 primaryRoot（可能是子项目根目录）查找
+    const primaryPath = path.join(primaryRoot, ruleFileName);
+    if (existsSync(primaryPath)) {
+      try {
+        const content = await fs.readFile(primaryPath, 'utf-8');
+        logger.info('[ProjectDetector] Custom rules loaded', { path: primaryPath });
+        return content;
+      } catch (error) {
+        logger.warn('[ProjectDetector] Failed to load custom rules', { path: primaryPath, error });
+      }
+    }
+
+    // 2. 如果 primaryRoot 与 projectRoot 不同（monorepo场景），再尝试从项目根目录查找
+    if (projectRoot && projectRoot !== primaryRoot) {
+      const fallbackPath = path.join(projectRoot, ruleFileName);
+      if (existsSync(fallbackPath)) {
         try {
-          const content = await fs.readFile(fullPath, 'utf-8');
-          logger.info('[ProjectDetector] Custom rules loaded', { path: rulePath });
+          const content = await fs.readFile(fallbackPath, 'utf-8');
+          logger.info('[ProjectDetector] Custom rules loaded from project root', { path: fallbackPath });
           return content;
         } catch (error) {
-          logger.warn('[ProjectDetector] Failed to load custom rules', { path: rulePath, error });
+          logger.warn('[ProjectDetector] Failed to load custom rules from project root', { path: fallbackPath, error });
+        }
+      }
+    }
+
+    logger.debug('[ProjectDetector] No custom rules found', { primaryRoot, projectRoot });
+    return undefined;
+  }
+
+  /**
+   * 从自定义规则中解析测试框架
+   * 查找类似 "测试框架: vitest" 或 "framework: jest" 的配置
+   */
+  private parseTestFrameworkFromRules(rules: string): 'vitest' | 'jest' | undefined {
+    // 匹配模式：测试框架: vitest, framework: jest, test framework: vitest等
+    const patterns = [
+      /测试框架[：:]\s*(vitest|jest)/i,
+      /framework[：:]\s*(vitest|jest)/i,
+      /test\s+framework[：:]\s*(vitest|jest)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = rules.match(pattern);
+      if (match) {
+        const framework = match[1].toLowerCase();
+        if (framework === 'vitest' || framework === 'jest') {
+          logger.info('[ProjectDetector] Test framework found in rules', { framework });
+          return framework;
         }
       }
     }

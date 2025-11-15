@@ -212,4 +212,114 @@ export class GitClient {
       throw new Error(`Failed to fetch: ${message}`);
     }
   }
+
+  /**
+   * 创建新分支
+   * @param workDir 工作目录
+   * @param newBranch 新分支名
+   * @param baseBranch 基于哪个分支创建（可选，默认当前分支）
+   */
+  async createBranch(workDir: string, newBranch: string, baseBranch?: string): Promise<void> {
+    const baseArg = baseBranch ? baseBranch : '';
+    const command = `git checkout -b ${newBranch} ${baseArg}`.trim();
+
+    logger.info('[GitClient] Creating branch', { workDir, newBranch, baseBranch });
+
+    try {
+      const { stderr } = await execAsync(command, {
+        cwd: workDir,
+        timeout: this.timeout,
+      });
+
+      if (stderr && !stderr.includes('Switched to a new branch')) {
+        logger.warn('[GitClient] Create branch stderr', { stderr });
+      }
+
+      logger.info('[GitClient] Branch created', { workDir, newBranch });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('[GitClient] Create branch failed', { workDir, newBranch, error: message });
+      throw new Error(`Failed to create branch: ${message}`);
+    }
+  }
+
+  /**
+   * 切换分支
+   * @param workDir 工作目录
+   * @param branch 分支名
+   */
+  async checkout(workDir: string, branch: string): Promise<void> {
+    const command = `git checkout ${branch}`;
+
+    logger.info('[GitClient] Checking out branch', { workDir, branch });
+
+    try {
+      const { stderr } = await execAsync(command, {
+        cwd: workDir,
+        timeout: this.timeout,
+      });
+
+      if (stderr && !stderr.includes('Switched to branch') && !stderr.includes('Already on')) {
+        logger.warn('[GitClient] Checkout stderr', { stderr });
+      }
+
+      logger.info('[GitClient] Checkout completed', { workDir, branch });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('[GitClient] Checkout failed', { workDir, branch, error: message });
+      throw new Error(`Failed to checkout branch: ${message}`);
+    }
+  }
+
+  /**
+   * 强制重置到指定引用
+   */
+  async resetHard(workDir: string, ref: string): Promise<void> {
+    const command = `git reset --hard ${ref}`;
+
+    logger.info('[GitClient] Resetting branch', { workDir, ref });
+
+    try {
+      const { stderr } = await execAsync(command, {
+        cwd: workDir,
+        timeout: this.timeout,
+      });
+
+      if (stderr && !stderr.includes('HEAD is now at')) {
+        logger.warn('[GitClient] Reset stderr', { stderr });
+      }
+
+      logger.info('[GitClient] Reset completed', { workDir, ref });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('[GitClient] Reset failed', { workDir, ref, error: message });
+      throw new Error(`Failed to reset branch: ${message}`);
+    }
+  }
+
+  /**
+   * 检查远程分支是否存在
+   * @param workDir 工作目录
+   * @param branch 分支名
+   * @param remote 远程名（默认 origin）
+   */
+  async remoteBranchExists(workDir: string, branch: string, remote: string = 'origin'): Promise<boolean> {
+    const command = `git ls-remote --heads ${remote} ${branch}`;
+
+    logger.debug('[GitClient] Checking remote branch existence', { workDir, branch, remote });
+
+    try {
+      const { stdout } = await execAsync(command, {
+        cwd: workDir,
+        timeout: this.timeout,
+      });
+
+      const exists = stdout.trim().length > 0;
+      logger.debug('[GitClient] Remote branch check result', { workDir, branch, remote, exists });
+      return exists;
+    } catch (error) {
+      logger.debug('[GitClient] Remote branch check failed', { workDir, branch, remote });
+      return false;
+    }
+  }
 }

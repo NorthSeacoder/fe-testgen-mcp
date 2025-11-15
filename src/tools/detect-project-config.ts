@@ -55,6 +55,6 @@ export class DetectProjectConfigTool extends BaseTool<DetectProjectConfigInput, 
       throw new Error(`Workspace not found: ${input.workspaceId}`);
     }
 
-    return projectDetector.detectProject(workspace.workDir);
+    return projectDetector.detectProject(workspace.workDir, workspace.packageRoot);
   }
 }

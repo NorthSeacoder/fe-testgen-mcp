@@ -98,13 +98,7 @@ export class FetchDiffFromRepoTool extends BaseTool<FetchDiffFromRepoInput, Fetc
 
     logger.info('[FetchDiffFromRepo] Workspace created', { workspaceId, workDir: workspace.workDir });
 
-    // 2. 检测项目配置
-    const projectConfig = await projectDetector.detectProject(workspace.workDir);
-
-    // 3. 获取 diff
-    const diff = await workspaceManager.getDiff(workspaceId);
-
-    // 4. 获取变更文件列表
+    // 2. 获取变更文件列表
     const changedFiles = await gitClient.getChangedFiles(
       workspace.workDir,
       workspace.baselineBranch,
@@ -113,14 +107,22 @@ export class FetchDiffFromRepoTool extends BaseTool<FetchDiffFromRepoInput, Fetc
 
     logger.info('[FetchDiffFromRepo] Changed files retrieved', { count: changedFiles.length });
 
-    // 5. 如果是 Monorepo，识别子项目
-    if (projectConfig.isMonorepo && changedFiles.length > 0) {
+    // 3. 尝试识别子项目（monorepo 场景）
+    let packageRoot: string | undefined;
+    if (changedFiles.length > 0) {
       const subProject = await projectDetector.detectSubProject(workspace.workDir, changedFiles);
       if (subProject) {
-        projectConfig.packageRoot = subProject;
+        packageRoot = subProject;
+        workspace.packageRoot = subProject;
         logger.info('[FetchDiffFromRepo] Sub-project identified', { subProject });
       }
     }
+
+    // 4. 使用识别的子项目根目录检测项目配置（这样可以正确加载子项目的规则）
+    const projectConfig = await projectDetector.detectProject(workspace.workDir, packageRoot);
+
+    // 5. 获取 diff
+    const diff = await workspaceManager.getDiff(workspaceId);
 
     return {
       workspaceId,

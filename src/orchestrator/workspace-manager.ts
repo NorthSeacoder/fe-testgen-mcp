@@ -18,11 +18,14 @@ export interface WorkspaceConfig {
 export interface Workspace {
   id: string;
   repoUrl: string;
-  branch: string;
+  branch: string;           // 当前工作分支（可能是测试分支）
+  sourceBranch: string;     // 原始特性分支
+  testBranch?: string;      // 如果创建了测试分支，记录名称
   baselineBranch: string;
   workDir: string;
   createdAt: number;
   isTemporary: boolean;
+  packageRoot?: string;     // 识别到的子项目根目录（monorepo）
 }
 
 interface WorkspaceManagerOptions {
@@ -53,25 +56,39 @@ export class WorkspaceManager {
 
   /**
    * 创建工作区
+   * 自动创建或切换到 <feature>-test 分支
    */
   async createWorkspace(config: WorkspaceConfig): Promise<string> {
     const workspaceId = `ws-${Date.now()}-${randomString(6)}`;
     const baselineRef = config.baselineBranch?.trim() || 'origin/HEAD';
+    const sourceBranch = config.branch;
+    
+    // 生成测试分支名：feature/xxx -> feature/xxx-test
+    const testBranch = this.generateTestBranchName(sourceBranch);
 
     const isLocalPath = !config.repoUrl.startsWith('http://') && !config.repoUrl.startsWith('https://') && !config.repoUrl.startsWith('git@');
     let workDir: string;
     let isTemporary = false;
+    let actualBranch = sourceBranch;
 
     if (config.workDir) {
       workDir = config.workDir;
       isTemporary = false;
+      
+      // 本地工作目录：尝试切换到测试分支或创建
+      actualBranch = await this.setupTestBranch(workDir, sourceBranch, testBranch);
     } else if (isLocalPath) {
       workDir = path.resolve(config.repoUrl);
       isTemporary = false;
+      
+      // 本地路径：尝试切换到测试分支或创建
+      actualBranch = await this.setupTestBranch(workDir, sourceBranch, testBranch);
     } else {
       await fs.mkdir(this.baseDir, { recursive: true });
       workDir = path.join(this.baseDir, workspaceId);
-      await this.gitClient.clone(config.repoUrl, workDir, config.branch);
+      
+      // 克隆远程仓库，先克隆源分支
+      await this.gitClient.clone(config.repoUrl, workDir, sourceBranch);
       isTemporary = true;
 
       const fetchTarget = baselineRef.startsWith('origin/') ? baselineRef.slice('origin/'.length) : baselineRef;
@@ -88,12 +105,17 @@ export class WorkspaceManager {
           error: error instanceof Error ? error.message : String(error),
         });
       }
+
+      // 设置测试分支
+      actualBranch = await this.setupTestBranch(workDir, sourceBranch, testBranch);
     }
 
     const workspace: Workspace = {
       id: workspaceId,
       repoUrl: config.repoUrl,
-      branch: config.branch,
+      branch: actualBranch,
+      sourceBranch,
+      testBranch: actualBranch === testBranch ? testBranch : undefined,
       baselineBranch: baselineRef,
       workDir,
       createdAt: Date.now(),
@@ -102,9 +124,124 @@ export class WorkspaceManager {
 
     this.workspaces.set(workspaceId, workspace);
 
-    logger.info('[WorkspaceManager] Workspace created', { workspaceId, workDir, repoUrl: config.repoUrl });
+    logger.info('[WorkspaceManager] Workspace created', {
+      workspaceId,
+      workDir,
+      repoUrl: config.repoUrl,
+      sourceBranch,
+      actualBranch,
+      testBranch: workspace.testBranch,
+    });
 
     return workspaceId;
+  }
+
+  /**
+   * 生成测试分支名
+   * feature/xxx -> feature/xxx-test
+   * bugfix/xxx -> bugfix/xxx-test
+   */
+  private generateTestBranchName(sourceBranch: string): string {
+    if (sourceBranch.endsWith('-test')) {
+      return sourceBranch;
+    }
+    return `${sourceBranch}-test`;
+  }
+
+  /**
+   * 设置测试分支：检查是否存在，存在则切换，不存在则创建
+   */
+  private async setupTestBranch(workDir: string, sourceBranch: string, testBranch: string): Promise<string> {
+    if (testBranch === sourceBranch) {
+      // 原始分支已经是测试分支，直接切换
+      try {
+        await this.gitClient.checkout(workDir, sourceBranch);
+      } catch (error) {
+        logger.warn('[WorkspaceManager] Failed to checkout source branch', {
+          sourceBranch,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return sourceBranch;
+    }
+
+    const remoteSourceRef = `origin/${sourceBranch}`;
+
+    const resetToSource = async () => {
+      // 优先尝试重置到远程源分支，如果不可用，再退回到本地源分支
+      try {
+        const remoteSourceExists = await this.gitClient.remoteBranchExists(workDir, sourceBranch);
+        if (remoteSourceExists) {
+          await this.gitClient.fetch(workDir, 'origin', sourceBranch).catch(() => void 0);
+          await this.gitClient.resetHard(workDir, remoteSourceRef);
+          logger.info('[WorkspaceManager] Test branch reset to remote source branch', {
+            sourceBranch,
+            ref: remoteSourceRef,
+          });
+          return;
+        }
+      } catch (error) {
+        logger.warn('[WorkspaceManager] Failed to reset to remote source branch, trying local branch', {
+          sourceBranch,
+          error,
+        });
+      }
+
+      try {
+        await this.gitClient.resetHard(workDir, sourceBranch);
+        logger.info('[WorkspaceManager] Test branch reset to local source branch', { sourceBranch });
+      } catch (error) {
+        logger.warn('[WorkspaceManager] Failed to reset test branch to source branch', { error });
+      }
+    };
+
+    try {
+      // 检查本地/远程是否已有测试分支
+      const [localExists, remoteExists] = await Promise.all([
+        this.gitClient.branchExists(workDir, testBranch),
+        this.gitClient.remoteBranchExists(workDir, testBranch),
+      ]);
+
+      if (remoteExists) {
+        logger.info('[WorkspaceManager] Test branch exists remotely, preparing local branch', { testBranch });
+        await this.gitClient.fetch(workDir, 'origin', testBranch).catch(() => void 0);
+
+        if (!localExists) {
+          await this.gitClient.createBranch(workDir, testBranch, `origin/${testBranch}`);
+        } else {
+          await this.gitClient.checkout(workDir, testBranch);
+        }
+
+        await resetToSource();
+        return testBranch;
+      }
+
+      if (localExists) {
+        logger.info('[WorkspaceManager] Test branch exists locally, switching', { testBranch });
+        await this.gitClient.checkout(workDir, testBranch);
+        await resetToSource();
+        return testBranch;
+      }
+
+      // 本地和远程都不存在，基于源分支创建新的测试分支
+      logger.info('[WorkspaceManager] Creating new test branch', { testBranch, sourceBranch });
+
+      const remoteSourceExists = await this.gitClient.remoteBranchExists(workDir, sourceBranch);
+      if (remoteSourceExists) {
+        await this.gitClient.fetch(workDir, 'origin', sourceBranch).catch(() => void 0);
+        await this.gitClient.createBranch(workDir, testBranch, remoteSourceRef);
+      } else {
+        await this.gitClient.createBranch(workDir, testBranch, sourceBranch);
+      }
+      return testBranch;
+    } catch (error) {
+      logger.error('[WorkspaceManager] Failed to setup test branch, using source branch', {
+        sourceBranch,
+        testBranch,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return sourceBranch;
+    }
   }
 
   /**
