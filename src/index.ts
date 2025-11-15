@@ -28,8 +28,10 @@ import { GenerateTestsWorkerTool } from './tools/generate-tests-worker.js';
 import { WriteTestFileTool } from './tools/write-test-file.js';
 import { RunTestsTool } from './tools/run-tests.js';
 import { FixFailingTestsTool } from './tools/fix-failing-tests.js';
+import { TestGenerationWorkflowTool } from './tools/test-generation-workflow.js';
 import { AnalyzeRawDiffTestMatrixTool } from './tools/analyze-raw-diff-test-matrix.js';
 import { GenerateTestsFromRawDiffTool } from './tools/generate-tests-from-raw-diff.js';
+import { GenerateCursorRuleTool } from './tools/generate-cursor-rule.js';
 import { getEnv, validateAiConfig } from './config/env.js';
 import { loadConfig } from './config/loader.js';
 import { logger } from './utils/logger.js';
@@ -154,14 +156,12 @@ function initialize() {
   toolRegistry.register(new WriteTestFileTool());
   toolRegistry.register(new RunTestsTool());
   toolRegistry.register(new FixFailingTestsTool());
+  toolRegistry.register(new TestGenerationWorkflowTool());
+  toolRegistry.register(new GenerateCursorRuleTool());
   
   // 5. 原始 Diff 工具
   toolRegistry.register(new AnalyzeRawDiffTestMatrixTool(openai, state));
   toolRegistry.register(new GenerateTestsFromRawDiffTool(openai, embedding, state, contextStore));
-  
-  // TODO: 其他辅助工具待实现:
-  // - 完整工作流工具 (M4)
-  // - 配置文件生成工具 (M5)
 
   // 初始化缓存预热（异步执行，不阻塞启动）
   const warmer = initializeCacheWarmer({

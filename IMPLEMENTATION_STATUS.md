@@ -111,20 +111,38 @@ All tasks in M3 have now been completed:
 
 ---
 
-## M4: n8n 集成增强（P1）- ⚠️ NOT STARTED
+## M4: n8n 集成增强（P1）- ✅ COMPLETE
 
-Tasks remaining:
-- [ ] M4.1: Create TestGenerationWorkflowTool (one-click workflow)
-- [ ] M4.2: Register tool to MCP
+All tasks in M4 have now been completed:
+
+- ✅ M4.1: TestGenerationWorkflowTool created (`src/tools/test-generation-workflow.ts`)
+  - 整合完整测试生成流程（6 个步骤）
+  - 支持自动修复失败测试
+  - 详细的步骤耗时记录
+  - 完善的错误处理
+
+- ✅ M4.2: Tool registered to MCP (`src/index.ts`)
+  - TestGenerationWorkflowTool 已注册
+  - 可通过 test-generation-workflow 调用
 
 ---
 
-## M5: 配置文件增强（P2）- ⚠️ NOT STARTED
+## M5: 配置文件增强（P2）- ✅ COMPLETE
 
-Tasks remaining:
-- [ ] M5.1: Create cursor-rule-template.md
-- [ ] M5.2: Create GenerateCursorRuleTool
-- [ ] M5.3: Register tool to MCP
+All tasks in M5 have now been completed:
+
+- ✅ M5.1: cursor-rule-template.md created (`docs/cursor-rule-template.md`)
+  - 模板内容覆盖项目信息、测试策略、代码规范、Monorepo 建议
+  - 提供占位符以适配不同项目
+
+- ✅ M5.2: GenerateCursorRuleTool created (`src/tools/generate-cursor-rule.ts`)
+  - 自动读取工作区和项目配置
+  - 根据模板生成 `.cursor/rule/fe-mcp.md`
+  - 支持自定义输出路径
+
+- ✅ M5.3: Tool registered to MCP (`src/index.ts`)
+  - GenerateCursorRuleTool 已注册
+  - 可通过 generate-cursor-rule 调用
 
 ---
 
@@ -146,10 +164,13 @@ Tasks remaining:
 
 ## Next Steps
 
-1. **Immediate**: Test the worker tools in an actual workflow
-2. **Short-term**: Implement M3 (test case fixing)
-3. **Medium-term**: Implement M4 (workflow tool)
-4. **Optional**: Implement M5 (config generation)
+**所有计划任务（M1-M5）已完成！** 🎉
+
+建议进一步优化：
+1. 完善各工具的错误处理和边界情况
+2. 添加更多单元测试
+3. 优化 worker 性能和超时设置
+4. 根据实际使用反馈调整 prompt 模板
 
 ---
 
